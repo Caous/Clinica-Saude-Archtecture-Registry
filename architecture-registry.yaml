@@ -1,16 +1,3 @@
-# ARCHITECTURE REGISTRY - Instituto Barros
-# Fonte de verdade do ecossistema técnico.
-# Consumido por: Agentes IA (OpenCode) para geração de código, specs e tarefas.
-# Atualizar sempre que: novas entidades, rotas, módulos, permissões ou infra forem adicionados.
-#
-# Última atualização: 2026-07-03
-#   2026-07-03: UserController +3 endpoints role management; CustomerDataRepository perf (pagination,
-#               Task.WhenAll per-chunk, AsNoTracking, AsSplitQuery, Chunk 2000); GetAllCustomerSummary;
-#               FormEmployee carrega acesso existente + remove role; página /documentacao;
-#               fix timezone BR; fix Forbid(); fix 48h CoordenadorFisioterapeuta; fix concurrent DbContext.
-#               Novos apontamentos: CS023–CS028. Itens resolvidos marcados como [FIXED].
-#   2026-04-21: Code review completo: AV001–AV010, CS001–CS022
-
 organization:
   name: Instituto Barros
   domain: Clínica de Fisioterapia
@@ -869,6 +856,8 @@ pending:
   - id: AV004
     severity: medium
     category: architecture_violation
+    status: fixed
+    fixed_in: "branch fix/architecture-codesm-review (2026-07-03)"
     description: >
       Duplo registro de IManagerUserService no IoC — JwtSecurityExtension.cs e
       DomainDrivenDesignModule.cs ambos chamam AddScoped<IManagerUserService, ManagerUserService>().
@@ -898,12 +887,14 @@ pending:
   - id: AV006
     severity: high
     category: architecture_violation
+    status: fixed
+    fixed_in: "branch fix/architecture-codesm-review (2026-07-03)"
     description: >
       IdentityInitializer usa sync-over-async (.Result e .Wait()) — risco de deadlock
       sob carga em ambientes com SynchronizationContext.
     files:
       - Infrastructure/.../IdentityInitializerDependency/IdentityInitializer.cs
-    fix: "Tornar o método async Task e usar await em todas as chamadas de _roleManager e _userManager."
+    fix: "Convertido para async Task InitializeAsync() com await em todas as chamadas de _roleManager e _userManager. EnsureRoleAsync extraído como helper privado."
     priority: alta
 
   - id: AV007
@@ -931,12 +922,14 @@ pending:
   - id: AV009
     severity: low
     category: architecture_violation
+    status: fixed
+    fixed_in: "branch fix/architecture-codesm-review (2026-07-03)"
     description: >
       JwtSecurityExtension.cs declara namespace incorreto
       (DomainDrivenDesign.Infrastructure.Data.Repositories) mas o arquivo está em Security/.
     files:
       - Infrastructure/.../Security/JwtSecurityExtension.cs (linha 1)
-    fix: "Corrigir para DomainDrivenDesign.Infrastructure.Data.Security."
+    fix: "Namespace corrigido para DomainDrivenDesign.Infrastructure.Data.Security."
     priority: baixa
 
   - id: AV010
@@ -1024,6 +1017,8 @@ pending:
   - id: CS007
     severity: high
     category: code_smell
+    status: fixed
+    fixed_in: "branch fix/architecture-codesm-review (2026-07-03)"
     description: >
       Exceções capturadas e descartadas sem logging em múltiplos controllers —
       impossível diagnosticar erros em produção.
@@ -1033,7 +1028,7 @@ pending:
       - Presentation/.../Controllers/SubCategoryController.cs (linha 160)
       - Presentation/.../Controllers/CustomerController.cs (linhas 272, 297)
       - Presentation/.../Controllers/ClienteController.cs (linhas 355, 583)
-    fix: "Injetar ILogger<T> e adicionar _logger.LogError(ex, 'contexto') em cada catch, ou remover try/catch local e deixar GlobalExceptionFilter tratar."
+    fix: "ILogger<T> injetado em BranchOfficeController, EmployeeController, SubCategoryController, CustomerController, ClienteController. Todos os catch blocks agora logam com _logger.LogError(ex, ...) ou _logger.LogWarning."
     priority: alta
 
   - id: CS008
@@ -1050,40 +1045,46 @@ pending:
   - id: CS009
     severity: medium
     category: code_smell
+    status: partial
+    fixed_in: "branch fix/architecture-codesm-review (2026-07-03) — parcial"
     description: >
       Números mágicos (magic numbers) sem nome simbólico espalhados pelo código.
     occurrences:
-      - "OrderServiceDataRepository.cs:46 — == 6 (status 'Concluída')"
-      - "ClienteController.cs:580 — TipoNotificacao = 3 (cancelamento)"
-      - "OrderServiceSessionService.cs:158 — TipoNotificacao = 1 (check-in realizado)"
-      - "OrderServiceSessionService.cs:308 — TipoNotificacao = 2 (check-in excluído)"
-      - "DomainDrivenDesignModule.cs:193 — 'leads' (nome MongoDB)"
-      - "DashboardService.cs:449 — '1','2' (tipos transação saída/entrada)"
+      - "OrderServiceDataRepository.cs:46 — == 6 (status 'Concluída') — FIXED: EOrderServiceStatus.Concluido"
+      - "ClienteController.cs:580 — TipoNotificacao = 3 (cancelamento) — FIXED: ENotificationType.AgendamentoCancelado"
+      - "OrderServiceSessionService.cs:158 — TipoNotificacao = 1 (check-in realizado) — OPEN"
+      - "OrderServiceSessionService.cs:308 — TipoNotificacao = 2 (check-in excluído) — OPEN"
+      - "DomainDrivenDesignModule.cs:193 — 'leads' (nome MongoDB) — OPEN"
+      - "DashboardService.cs:449 — '1','2' (tipos transação saída/entrada) — OPEN"
     fix: "Usar as enumerações tipadas já existentes (EOrderServiceStatus, ENotificationType, etc.) de forma consistente. Criar constantes nomeadas onde não houver enum."
     priority: media
 
   - id: CS010
     severity: medium
     category: code_smell
+    status: fixed
+    fixed_in: "branch fix/architecture-codesm-review (2026-07-03)"
     description: >
       Verificação if (id == null) em parâmetro do tipo Guid (struct) —
       condição é sempre false, validação nunca é executada.
     files:
       - Presentation/.../Controllers/CustomerController.cs (linhas 157, 191, 243)
-    fix: "Substituir por if (id == Guid.Empty) ou usar Guid? se o parâmetro for opcional."
+    fix: "Substituído por if (id == Guid.Empty) nas 3 ocorrências de CustomerController."
     priority: media
 
   - id: CS011
     severity: medium
     category: code_smell
+    status: partial
+    fixed_in: "branch fix/architecture-codesm-review (2026-07-03) — parcial"
     description: >
       Métodos async Task sem nenhum await — warnings do compilador e overhead desnecessário.
     files:
-      - Infrastructure/.../Repositories/RepositoryBase.cs (método Update)
-      - Infrastructure/.../Repositories/OrderServiceDataRepository.cs (método ChangeStatus)
-      - Application/.../Services/SessionManagementService.cs (vários — return await Task.FromResult)
-      - Application/.../Services/SecurePasswordRecoveryService.cs (GetSecurityQuestionsAsync)
-    fix: "Remover modificador async dos métodos que não usam await. Retornar Task.CompletedTask ou Task.FromResult diretamente."
+      - Infrastructure/.../Repositories/RepositoryBase.cs (método Update) — FIXED
+      - Infrastructure/.../Repositories/OrderServiceDataRepository.cs (método ChangeStatus) — FIXED
+      - Application/.../Services/SessionManagementService.cs (vários — return await Task.FromResult) — OPEN
+      - Application/.../Services/SecurePasswordRecoveryService.cs (GetSecurityQuestionsAsync) — OPEN
+    fix: "RepositoryBase.Update e OrderServiceDataRepository.ChangeStatus convertidos para Task síncrono (sem async/await). SessionManagementService e SecurePasswordRecoveryService pendentes."
     priority: media
 
   - id: CS012
@@ -1114,6 +1115,8 @@ pending:
   - id: CS014
     severity: medium
     category: code_smell
+    status: fixed
+    fixed_in: "branch fix/architecture-codesm-review (2026-07-03)"
     description: >
       Métodos que sempre lançam NotImplementedException em código de produção — código morto.
     files:
@@ -1121,18 +1124,20 @@ pending:
       - Domain/.../Services/CategoryServiceDataService.cs:46 (GetCategoryExistByTitleAsync)
       - Domain/.../Services/SubCategoryServiceDataService.cs:45 (GetSubCategoryExistByTitleAsync)
       - Domain/.../Services/EmployeeServiceDataService.cs:49 (GetEmployeeExistByNameAsync)
-    fix: "Remover os métodos das interfaces e implementações, ou implementá-los se necessários."
+    fix: "Métodos removidos das 4 interfaces e implementações."
     priority: media
 
   - id: CS015
     severity: low
     category: code_smell
+    status: fixed
+    fixed_in: "branch fix/architecture-codesm-review (2026-07-03)"
     description: >
       URLs de origens confiáveis hard-coded em AntiForgeryMiddleware —
       dificulta deploy em múltiplos ambientes sem recompilar.
     files:
       - Presentation/.../Middleware/AntiForgeryMiddleware.cs (linha 16)
-    fix: "Mover para appsettings.json (Cors:AllowedOrigins) e injetar via IConfiguration."
+    fix: "TrustedOrigins estático removido. AntiForgeryMiddleware agora injeta IConfiguration e carrega origens de Cors:AllowedOrigins (appsettings.json)."
     priority: baixa
 
   - id: CS016
@@ -1150,12 +1155,14 @@ pending:
   - id: CS017
     severity: low
     category: code_smell
+    status: fixed
+    fixed_in: "branch fix/architecture-codesm-review (2026-07-03)"
     description: >
       Expressões ternárias aninhadas ilegíveis em mapeamento de filtros.
     files:
       - Domain/.../Services/CategoryServiceDataService.cs (linha 41)
       - Domain/.../Services/SubCategoryServiceDataService.cs (linha 41)
-    fix: "Substituir por operador null-coalescing (??) e pattern matching (is not null)."
+    fix: "Ternários substituídos por ?? e pattern matching (is { } id) em CategoryServiceDataService e SubCategoryServiceDataService."
     priority: baixa
 
   - id: CS018
@@ -1183,12 +1190,14 @@ pending:
   - id: CS020
     severity: low
     category: code_smell
+    status: fixed
+    fixed_in: "branch fix/architecture-codesm-review (2026-07-03)"
     description: >
       LogsController define DataCadastro = DateTime.Now diretamente no controller —
       responsabilidade que deveria estar no Domain Service ou mapper.
     files:
       - Presentation/.../Controllers/LogsController.cs (linha 193)
-    fix: "Mover atribuição de DataCadastro para LogDataService.Create."
+    fix: "DateTime.Now substituído por DateTime.UtcNow. Responsabilidade de mover para Domain Service fica como melhoria futura."
     priority: baixa
 
   - id: CS021
@@ -1208,12 +1217,14 @@ pending:
   - id: CS022
     severity: medium
     category: security
+    status: fixed
+    fixed_in: "branch fix/architecture-codesm-review (2026-07-03)"
     description: >
       ScheduleParticipantController.DisableAsync aceita userDesabled como parâmetro HTTP —
       permite que o chamador impersone outro usuário como responsável pela desativação.
     files:
       - Presentation/.../Controllers/ScheduleParticipantController.cs (linha 79)
-    fix: "Remover userDesabled do parâmetro e obtê-lo de UserId (MainController), como os demais controllers fazem."
+    fix: "Parâmetro userDesabled removido do endpoint. Agora usa UserId (MainController) extraído do JWT."
     priority: media
 
   # ── NOVOS APONTAMENTOS (2026-07-03) ──────────────────────────────────────────
@@ -1221,7 +1232,8 @@ pending:
   - id: CS023
     severity: high
     category: security
-    status: open
+    status: fixed
+    fixed_in: "branch fix/security-cs023-role-management / PR #20 (2026-07-03)"
     description: >
       Endpoints de gerenciamento de roles (GET /FuncionarioAccess, DELETE/{userId}/Role/{role},
       POST/{userId}/Role/{role}) protegidos apenas por [Authorize] genérico — qualquer usuário
@@ -1229,7 +1241,7 @@ pending:
       outro usuário, incluindo promover a Administrador.
     files:
       - Presentation/.../Controllers/UserController.cs (GetFuncionarioAccess, RemoveRole, AddRole)
-    fix: "Adicionar [Authorize(Roles = Roles.Administrador)] em cada endpoint de role management."
+    fix: "[Authorize(Roles = Roles.Administrador)] adicionado nos 3 endpoints de role management."
     priority: alta
 
   - id: CS024
