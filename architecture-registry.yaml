@@ -757,7 +757,7 @@ shared_platform:
       external_api: Evolution API (WhatsApp)
 
 # ─────────────────────────────────────────────
-# PENDÊNCIAS TÉCNICAS
+# PENDÊNCIAS TÉCNICAS (apenas itens abertos)
 # ─────────────────────────────────────────────
 pending:
   - id: P001
@@ -797,14 +797,7 @@ pending:
     description: "Remover credenciais reais deste arquivo (SEC001) e substituir por placeholders antes de commitar em repositório"
     priority: critica
 
-  - id: P007
-    status: open
-    description: "Adicionar [Authorize(Roles = Roles.Administrador)] nos 3 endpoints de role management do UserController (CS023)"
-    files:
-      - Presentation/.../Controllers/UserController.cs (GetFuncionarioAccess, RemoveRole, AddRole)
-    priority: alta
-
-  # ── VIOLAÇÕES ARQUITETURAIS (Code Review 2026-04-21) ───────────────────────
+  # ── VIOLAÇÕES ARQUITETURAIS ───────────────────────────────────────────────────
 
   - id: AV001
     severity: high
@@ -813,65 +806,33 @@ pending:
       Domain Services chamam SaveChangesAsync diretamente — viola o padrão onde
       apenas a camada Application orquestra transações.
     files:
-      - Domain/.../Services/CustomerDataService.cs (linhas 21, 51–52, 61, 67–68, 137–138)
-      - Domain/.../Services/OrderServiceDataService.cs (linhas 27–28, 53–54, 63–64, 75–76, 139–140)
-      - Domain/.../Services/FinancialTransactionDataService.cs (linhas 29, 38, 45, 82)
-      - Domain/.../Services/InstallmentDataService.cs (linhas 24, 31, 38, 73, 93)
-      - Domain/.../Services/NotificationDataService.cs (linhas 19, 27, 34, 55, 62, 82)
-      - Domain/.../Services/OrderServiceSessionDataService.cs (linhas 19, 26, 33)
-      - Domain/.../Services/LogDataService.cs (linhas 20, 27, 33)
-      - Domain/.../Services/ScheduleDataService.cs (linhas 25, 32, 38, 50)
-      - Domain/.../Services/BranchOfficeServiceDataService.cs (linhas 18, 27, 33, 57)
-      - Domain/.../Services/CategoryServiceDataService.cs (linhas 19, 28, 34, 54)
-      - Domain/.../Services/SubCategoryServiceDataService.cs (linhas 19, 27, 33, 53)
-      - Domain/.../Services/EmployeeServiceDataService.cs (linhas 19, 25, 32, 57)
-    fix: "Remover _repository.SaveChangesAsync() e _repository.DisposeCommitAsync() de todos os Domain Services. O Application Service correspondente já deve chamar SaveChangesAsync após delegar."
+      - Domain/.../Services/CustomerDataService.cs
+      - Domain/.../Services/OrderServiceDataService.cs
+      - Domain/.../Services/FinancialTransactionDataService.cs
+      - Domain/.../Services/InstallmentDataService.cs
+      - Domain/.../Services/NotificationDataService.cs
+      - Domain/.../Services/OrderServiceSessionDataService.cs
+      - Domain/.../Services/LogDataService.cs
+      - Domain/.../Services/ScheduleDataService.cs
+      - Domain/.../Services/BranchOfficeServiceDataService.cs
+      - Domain/.../Services/CategoryServiceDataService.cs
+      - Domain/.../Services/SubCategoryServiceDataService.cs
+      - Domain/.../Services/EmployeeServiceDataService.cs
+    fix: "Requer Unit of Work pattern — remover _repository.SaveChangesAsync() de todos os Domain Services e chamar no Application Service após delegar."
     priority: alta
 
   - id: AV002
     severity: high
     category: architecture_violation
-    status: partial
-    fixed_in: "branch fix/architecture-high-risk-items / PR #27 (2026-07-03)"
     description: >
-      Infrastructure referencia namespaces de Application — viola a ordem de dependências
-      Domain → Application → Infrastructure → Presentation.
+      Infrastructure ainda referencia Application em dois pontos — JwtSecurityExtension usa
+      Application.Services e Application.Interfaces; InstitutoContext usa Application.Mapper
+      (aceito por design atual dos mappers EF).
     files:
-      - Infrastructure/.../Context/InstitutoContext.cs (using DomainDrivenDesign.Application.Mapper) — OPEN (mappers EF ficam em Application por design atual)
-      - Infrastructure/.../Repositories/ScheduleDataRepository.cs (using DomainDrivenDesign.Application.RolesPermission) — FIXED: Roles movida para Domain.RolesPermission
-      - Infrastructure/.../IdentityInitializerDependency/IdentityInitializer.cs (using Application.RolesPermission) — FIXED: Roles movida para Domain.RolesPermission
-      - Infrastructure/.../Security/JwtSecurityExtension.cs (using DomainDrivenDesign.Application.Services e Interfaces) — OPEN
-    fix: "Roles movida para DomainDrivenDesign.Domain.RolesPermission — 14 arquivos atualizados. Restante: InstitutoContext usa Application.Mapper (design atual aceito); JwtSecurityExtension usa Application.Services (requer refactor JWT)."
+      - Infrastructure/.../Context/InstitutoContext.cs (using Application.Mapper — design atual)
+      - Infrastructure/.../Security/JwtSecurityExtension.cs (using Application.Services e Interfaces)
+    fix: "Extrair configuração JWT para módulo que não referencie Application diretamente. InstitutoContext aceito por ora."
     priority: alta
-
-  - id: AV003
-    severity: high
-    category: architecture_violation
-    status: fixed
-    fixed_in: "branch fix/architecture-high-risk-items / PR #27 (2026-07-03)"
-    description: >
-      Domain Service implementa interface definida na camada Application.
-      ManagerUserDataService implementa IManagerUserDataService do namespace
-      DomainDrivenDesign.Application.Interfaces — inverte a dependência.
-    files:
-      - Domain/.../Services/ManagerUserDataService.cs (linha 1)
-    fix: "IManagerUserDataService.cs tinha arquivo no projeto Domain mas namespace declarado como Application.Interfaces. Namespace corrigido para DomainDrivenDesign.Domain.Interfaces.Services. Callers (ManagerUserService, NotificationsController) atualizados com using adicional de Domain."
-    priority: alta
-
-  - id: AV004
-    severity: medium
-    category: architecture_violation
-    status: fixed
-    fixed_in: "branch fix/architecture-codesm-review (2026-07-03)"
-    description: >
-      Duplo registro de IManagerUserService no IoC — JwtSecurityExtension.cs e
-      DomainDrivenDesignModule.cs ambos chamam AddScoped<IManagerUserService, ManagerUserService>().
-      O segundo sobrescreve silenciosamente o primeiro.
-    files:
-      - Infrastructure/.../Security/JwtSecurityExtension.cs (linha 21)
-      - Infrastructure/.../IoC/DomainDrivenDesignModule.cs (linha 62)
-    fix: "Remover o registro duplicado de JwtSecurityExtension.cs."
-    priority: media
 
   - id: AV005
     severity: high
@@ -880,66 +841,9 @@ pending:
       Entidades de domínio com setters públicos — qualquer camada pode alterar
       o estado interno livremente. Viola encapsulamento DDD.
     files:
-      - Domain/.../Entities/BaseModel.cs
-      - Domain/.../Entities/CustomerModel.cs
-      - Domain/.../Entities/ScheduleModel.cs
-      - Domain/.../Entities/OrderServiceModel.cs
-      - Domain/.../Entities/EmployeeModel.cs
-      - Domain/.../Entities/BranchOfficeModel.cs (e demais entidades)
-    fix: "Converter public set para private set (ou init) e adicionar métodos de domínio com intenção explícita (AtualizarNome, Ativar, Desativar, etc.)."
+      - Domain/.../Entities/ (todas as entidades)
+    fix: "Converter public set para private set (ou init) e adicionar métodos de domínio com intenção explícita. Requer configuração HasField em cada EF mapper."
     priority: alta
-
-  - id: AV006
-    severity: high
-    category: architecture_violation
-    status: fixed
-    fixed_in: "branch fix/architecture-codesm-review (2026-07-03)"
-    description: >
-      IdentityInitializer usa sync-over-async (.Result e .Wait()) — risco de deadlock
-      sob carga em ambientes com SynchronizationContext.
-    files:
-      - Infrastructure/.../IdentityInitializerDependency/IdentityInitializer.cs
-    fix: "Convertido para async Task InitializeAsync() com await em todas as chamadas de _roleManager e _userManager. EnsureRoleAsync extraído como helper privado."
-    priority: alta
-
-  - id: AV007
-    severity: high
-    category: architecture_violation
-    status: fixed
-    fixed_in: "branch fix/architecture-pending-items / PR #25 (2026-07-03)"
-    description: >
-      Bug lógico: OrderServiceController.ChangeStatus passava new OrderServiceModel()
-      (entidade vazia) ao serviço em vez de buscar a entidade existente pelo id.
-    files:
-      - Presentation/.../Controllers/OrderServiceController.cs (linha 306)
-    fix: "IOrderServiceService.ChangeStatus refatorado para receber (Guid id, EOrderServiceStatus status). Application Service busca entidade por id antes de delegar ao domain service. Controller passa id diretamente."
-    priority: alta
-
-  - id: AV008
-    severity: medium
-    category: architecture_violation
-    status: fixed
-    fixed_in: "branch fix/architecture-pending-items / PR #25 (2026-07-03)"
-    description: >
-      Endpoint RegisterUser era [AllowAnonymous] — qualquer usuário não autenticado
-      podia criar uma conta. Facilita abuse (criação em massa, bypass de validações).
-    files:
-      - Presentation/.../Controllers/UserController.cs (linha 85)
-    fix: "[AllowAnonymous] substituído por [Authorize(Roles = Roles.Administrador)]. Apenas administradores podem criar contas."
-    priority: media
-
-  - id: AV009
-    severity: low
-    category: architecture_violation
-    status: fixed
-    fixed_in: "branch fix/architecture-codesm-review (2026-07-03)"
-    description: >
-      JwtSecurityExtension.cs declara namespace incorreto
-      (DomainDrivenDesign.Infrastructure.Data.Repositories) mas o arquivo está em Security/.
-    files:
-      - Infrastructure/.../Security/JwtSecurityExtension.cs (linha 1)
-    fix: "Namespace corrigido para DomainDrivenDesign.Infrastructure.Data.Security."
-    priority: baixa
 
   - id: AV010
     severity: medium
@@ -952,20 +856,7 @@ pending:
     fix: "Substituir interface de Domain por interface equivalente em Application, ou remover dependência."
     priority: media
 
-  # ── CODE SMELLS (Code Review 2026-04-21) ────────────────────────────────────
-
-  - id: CS001
-    severity: critical
-    category: security
-    status: fixed
-    fixed_in: "branch fix/architecture-high-risk-items / PR #27 (2026-07-03)"
-    description: >
-      Senha padrão do cliente gerada a partir da data de nascimento (ddMMyyyy) —
-      completamente previsível. Atacante com CPF + data de nascimento pode logar imediatamente.
-    files:
-      - Application/.../Services/CustomerAccessService.cs (linha 308)
-    fix: "GenerateDefaultPassword(DateTime) substituído por GenerateSecurePassword() usando RandomNumberGenerator.GetBytes(16). Senha de 12 chars com maiúsculas + minúsculas + dígitos garante requisitos Identity. Interface ICustomerAccessService atualizada."
-    priority: critica
+  # ── CODE SMELLS / SEGURANÇA ───────────────────────────────────────────────────
 
   - id: CS002
     severity: critical
@@ -982,15 +873,12 @@ pending:
   - id: CS003
     severity: high
     category: code_smell
-    status: partial
-    fixed_in: "branch fix/architecture-high-risk-items / PR #27 (2026-07-03)"
     description: >
-      Dicionário estático em memória para tokens de recuperação de senha —
-      não é thread-safe (race condition), não persiste entre restarts da aplicação.
-      O próprio código contém comentário 'in production, use distributed cache or database'.
+      Tokens de recuperação de senha em ConcurrentDictionary estático — thread-safe mas
+      não persiste entre restarts da aplicação.
     files:
-      - Application/.../Services/SecurePasswordRecoveryService.cs (linha 25)
-    fix: "Dictionary<> substituído por ConcurrentDictionary<> — elimina race condition em leituras/escritas concorrentes. Remove() substituído por TryRemove(). Pendente: persistência entre restarts (requer IDistributedCache/Redis com TTL)."
+      - Application/.../Services/SecurePasswordRecoveryService.cs
+    fix: "Substituir por IDistributedCache (Redis) com TTL para persistência entre instâncias."
     priority: alta
 
   - id: CS004
@@ -1004,20 +892,6 @@ pending:
     fix: "Remover o método ou movê-lo para projeto de testes."
     priority: alta
 
-  - id: CS005
-    severity: high
-    category: code_smell
-    status: fixed
-    fixed_in: "branch fix/architecture-high-risk-items / PR #27 (2026-07-03)"
-    description: >
-      Fire-and-forget sem CancellationToken: CleanupExpiredSessionsAsync executava
-      while(true) sem suporte a parada graciosa. Exceção não capturada encerrava
-      o loop silenciosamente.
-    files:
-      - Application/.../Services/SessionManagementService.cs (linha 32)
-    fix: "SessionManagementService implementa IHostedService (StartAsync/StopAsync). CleanupExpiredSessionsAsync recebe CancellationToken e encerra graciosamente via OperationCanceledException. DI atualizado: instância Singleton única registrada tanto para ISessionManagementService quanto para IHostedService via factory."
-    priority: alta
-
   - id: CS006
     severity: high
     category: code_smell
@@ -1029,92 +903,27 @@ pending:
     fix: "Extrair em: AuthenticationService (login/JWT), UserRegistrationService (criação), PasswordRecoveryService (reset), RoleManagementService (roles)."
     priority: alta
 
-  - id: CS007
-    severity: high
-    category: code_smell
-    status: fixed
-    fixed_in: "branch fix/architecture-codesm-review (2026-07-03)"
-    description: >
-      Exceções capturadas e descartadas sem logging em múltiplos controllers —
-      impossível diagnosticar erros em produção.
-    files:
-      - Presentation/.../Controllers/BranchOfficeController.cs (linha 175)
-      - Presentation/.../Controllers/EmployeeController.cs (linha 181)
-      - Presentation/.../Controllers/SubCategoryController.cs (linha 160)
-      - Presentation/.../Controllers/CustomerController.cs (linhas 272, 297)
-      - Presentation/.../Controllers/ClienteController.cs (linhas 355, 583)
-    fix: "ILogger<T> injetado em BranchOfficeController, EmployeeController, SubCategoryController, CustomerController, ClienteController. Todos os catch blocks agora logam com _logger.LogError(ex, ...) ou _logger.LogWarning."
-    priority: alta
-
-  - id: CS008
-    severity: medium
-    category: code_smell
-    status: fixed
-    fixed_in: "branch fix/architecture-pending-items / PR #25 (2026-07-03)"
-    description: >
-      Controle de fluxo baseado em comparação de string de mensagem de exceção —
-      frágil e quebra silenciosamente em refatorações.
-    files:
-      - Presentation/.../Controllers/CategoryServiceController.cs (linha 167)
-    fix: "catch genérico com if(ex.Message == 'Indice não encontrado') substituído por catch (KeyNotFoundException) → 404 e catch (Exception) → 500."
-    priority: media
-
   - id: CS009
     severity: medium
     category: code_smell
-    status: partial
-    fixed_in: "branch fix/architecture-codesm-review (2026-07-03) — parcial"
     description: >
-      Números mágicos (magic numbers) sem nome simbólico espalhados pelo código.
-    occurrences:
-      - "OrderServiceDataRepository.cs:46 — == 6 (status 'Concluída') — FIXED: EOrderServiceStatus.Concluido (PR #25)"
-      - "ClienteController.cs:580 — TipoNotificacao = 3 (cancelamento) — FIXED: ENotificationType.AgendamentoCancelado (PR #25)"
-      - "OrderServiceSessionService.cs:158 — TipoNotificacao = 1 (check-in realizado) — FIXED: ENotificationType.CheckInRealizado (PR #25)"
-      - "OrderServiceSessionService.cs:308 — TipoNotificacao = 2 (check-in excluído) — FIXED: ENotificationType.CheckInExcluido (PR #25)"
-      - "DomainDrivenDesignModule.cs:193 — 'leads' (nome MongoDB) — FIXED: const string MongoLeadsDatabase (PR #25)"
-      - "DashboardService.cs:449 — '1','2' (tipos transação saída/entrada) — OPEN"
-    fix: "Usar as enumerações tipadas já existentes (EOrderServiceStatus, ENotificationType, etc.) de forma consistente. Criar constantes nomeadas onde não houver enum."
-    priority: media
-
-  - id: CS010
-    severity: medium
-    category: code_smell
-    status: fixed
-    fixed_in: "branch fix/architecture-codesm-review (2026-07-03)"
-    description: >
-      Verificação if (id == null) em parâmetro do tipo Guid (struct) —
-      condição é sempre false, validação nunca é executada.
+      Magic number restante: DashboardService.cs usa '1','2' para tipos de transação
+      saída/entrada sem constante nomeada.
     files:
-      - Presentation/.../Controllers/CustomerController.cs (linhas 157, 191, 243)
-    fix: "Substituído por if (id == Guid.Empty) nas 3 ocorrências de CustomerController."
+      - Application/.../Services/DashboardService.cs (linha ~449)
+    fix: "Criar enum ou constantes ETipoTransacao.Saida/Entrada."
     priority: media
 
   - id: CS011
     severity: medium
     category: code_smell
-    status: partial
-    fixed_in: "branch fix/architecture-codesm-review (2026-07-03) — parcial"
     description: >
-      Métodos async Task sem nenhum await — warnings do compilador e overhead desnecessário.
+      Métodos async Task sem nenhum await em SessionManagementService e SecurePasswordRecoveryService
+      — warnings do compilador e overhead desnecessário.
     files:
-      - Infrastructure/.../Repositories/RepositoryBase.cs (método Update) — FIXED
-      - Infrastructure/.../Repositories/OrderServiceDataRepository.cs (método ChangeStatus) — FIXED
-      - Application/.../Services/SessionManagementService.cs (vários — return await Task.FromResult) — OPEN
-      - Application/.../Services/SecurePasswordRecoveryService.cs (GetSecurityQuestionsAsync) — OPEN
-    fix: "RepositoryBase.Update e OrderServiceDataRepository.ChangeStatus convertidos para Task síncrono (sem async/await). SessionManagementService e SecurePasswordRecoveryService pendentes."
-    priority: media
-
-  - id: CS012
-    severity: medium
-    category: code_smell
-    status: fixed
-    fixed_in: "branch fix/architecture-pending-items / PR #25 (2026-07-03)"
-    description: >
-      RepositoryBase.Desabled() usava DateTime.Now (horário local do servidor, difere
-      entre instâncias, não testável/mockável).
-    files:
-      - Infrastructure/.../Repositories/RepositoryBase.cs (linha 69)
-    fix: "DateTime.Now substituído por DateTime.UtcNow em RepositoryBase.Desabled()."
+      - Application/.../Services/SessionManagementService.cs (vários — return await Task.FromResult)
+      - Application/.../Services/SecurePasswordRecoveryService.cs (GetSecurityQuestionsAsync)
+    fix: "Remover async/await e retornar Task.FromResult diretamente, ou usar ValueTask."
     priority: media
 
   - id: CS013
@@ -1123,79 +932,11 @@ pending:
     description: >
       Nomenclatura inconsistente e typos propagados por toda a base de código.
     occurrences:
-      - "RepositoryBase.cs — campo _sampleContext (deveria ser _dbContext ou _context)"
-      - "CustomerDataRepository.cs — define novo campo 'protected new InstitutoContext _context' duplicando _sampleContext herdado"
+      - "RepositoryBase.cs — campo _sampleContext (deveria ser _dbContext)"
+      - "CustomerDataRepository.cs — campo duplicado 'protected new InstitutoContext _context'"
       - "EmployeeValidador.cs — typo 'Validador' (deveria ser Validator)"
       - "Método Desabled() em toda a base (deveria ser Disabled)"
-      - "EmployeeServiceDataService.cs:45 — parâmetro nomeado 'email' em método GetBranchOfficeExistByTitleAsync"
     fix: "Renomear via busca/substituição global; eliminar campo duplicado em CustomerDataRepository."
-    priority: baixa
-
-  - id: CS014
-    severity: medium
-    category: code_smell
-    status: fixed
-    fixed_in: "branch fix/architecture-codesm-review (2026-07-03)"
-    description: >
-      Métodos que sempre lançam NotImplementedException em código de produção — código morto.
-    files:
-      - Domain/.../Services/BranchOfficeServiceDataService.cs:50 (GetBranchOfficeExistByTitleAsync)
-      - Domain/.../Services/CategoryServiceDataService.cs:46 (GetCategoryExistByTitleAsync)
-      - Domain/.../Services/SubCategoryServiceDataService.cs:45 (GetSubCategoryExistByTitleAsync)
-      - Domain/.../Services/EmployeeServiceDataService.cs:49 (GetEmployeeExistByNameAsync)
-    fix: "Métodos removidos das 4 interfaces e implementações."
-    priority: media
-
-  - id: CS015
-    severity: low
-    category: code_smell
-    status: fixed
-    fixed_in: "branch fix/architecture-codesm-review (2026-07-03)"
-    description: >
-      URLs de origens confiáveis hard-coded em AntiForgeryMiddleware —
-      dificulta deploy em múltiplos ambientes sem recompilar.
-    files:
-      - Presentation/.../Middleware/AntiForgeryMiddleware.cs (linha 16)
-    fix: "TrustedOrigins estático removido. AntiForgeryMiddleware agora injeta IConfiguration e carrega origens de Cors:AllowedOrigins (appsettings.json)."
-    priority: baixa
-
-  - id: CS016
-    severity: low
-    category: code_smell
-    status: fixed
-    fixed_in: "branch fix/architecture-pending-items / PR #25 (2026-07-03)"
-    description: >
-      Mappers de EF com prefixo 'I' sugerindo interface — são classes concretas
-      que implementam IEntityTypeConfiguration<T>.
-    files:
-      - Application/.../Mapper/IFinancialTransactionDataMapper.cs
-      - Application/.../Mapper/IInstallmentDataMapper.cs
-    fix: "Classes renomeadas para FinancialTransactionDataMapper e InstallmentDataMapper. InstitutoContext.cs atualizado para usar new FinancialTransactionDataMapper() e new InstallmentDataMapper()."
-    priority: baixa
-
-  - id: CS017
-    severity: low
-    category: code_smell
-    status: fixed
-    fixed_in: "branch fix/architecture-codesm-review (2026-07-03)"
-    description: >
-      Expressões ternárias aninhadas ilegíveis em mapeamento de filtros.
-    files:
-      - Domain/.../Services/CategoryServiceDataService.cs (linha 41)
-      - Domain/.../Services/SubCategoryServiceDataService.cs (linha 41)
-    fix: "Ternários substituídos por ?? e pattern matching (is { } id) em CategoryServiceDataService e SubCategoryServiceDataService."
-    priority: baixa
-
-  - id: CS018
-    severity: low
-    category: code_smell
-    status: fixed
-    fixed_in: "branch fix/architecture-pending-items / PR #25 (2026-07-03)"
-    description: >
-      Uso de new Guid() no lugar de Guid.Empty — semanticamente confuso.
-    files:
-      - Domain/.../Services/ScheduleDataService.cs (linha 76)
-    fix: "new Guid() substituído por Guid.Empty em ScheduleDataService.GetAllAsync."
     priority: baixa
 
   - id: CS019
@@ -1210,19 +951,6 @@ pending:
     fix: "Criar ticket rastreável com data-limite. Idealmente remover antes do próximo release."
     priority: media
 
-  - id: CS020
-    severity: low
-    category: code_smell
-    status: fixed
-    fixed_in: "branch fix/architecture-codesm-review (2026-07-03)"
-    description: >
-      LogsController define DataCadastro = DateTime.Now diretamente no controller —
-      responsabilidade que deveria estar no Domain Service ou mapper.
-    files:
-      - Presentation/.../Controllers/LogsController.cs (linha 193)
-    fix: "DateTime.Now substituído por DateTime.UtcNow. Responsabilidade de mover para Domain Service fica como melhoria futura."
-    priority: baixa
-
   - id: CS021
     severity: medium
     category: code_smell
@@ -1234,141 +962,24 @@ pending:
       - "OrderServiceSessionService.cs — DeleteAsyncWithNotification (~130 linhas)"
       - "ManagerUserService.cs — ValidationCredentialsCliente (~90 linhas)"
       - "Program.cs — configuração de rate limiter inline (~130 linhas)"
-    fix: "Extrair lógica de notificação em NotificationOrchestrationService; mover configuração de rate limiter para método de extensão; extrair validação de credenciais em CredentialValidator."
+    fix: "Extrair lógica de notificação em NotificationOrchestrationService; mover rate limiter para método de extensão."
     priority: media
-
-  - id: CS022
-    severity: medium
-    category: security
-    status: fixed
-    fixed_in: "branch fix/architecture-codesm-review (2026-07-03)"
-    description: >
-      ScheduleParticipantController.DisableAsync aceita userDesabled como parâmetro HTTP —
-      permite que o chamador impersone outro usuário como responsável pela desativação.
-    files:
-      - Presentation/.../Controllers/ScheduleParticipantController.cs (linha 79)
-    fix: "Parâmetro userDesabled removido do endpoint. Agora usa UserId (MainController) extraído do JWT."
-    priority: media
-
-  # ── NOVOS APONTAMENTOS (2026-07-03) ──────────────────────────────────────────
-
-  - id: CS023
-    severity: high
-    category: security
-    status: fixed
-    fixed_in: "branch fix/security-cs023-role-management / PR #20 (2026-07-03)"
-    description: >
-      Endpoints de gerenciamento de roles (GET /FuncionarioAccess, DELETE/{userId}/Role/{role},
-      POST/{userId}/Role/{role}) protegidos apenas por [Authorize] genérico — qualquer usuário
-      autenticado (Fisioterapeuta, Comercial, etc.) pode remover ou adicionar roles a qualquer
-      outro usuário, incluindo promover a Administrador.
-    files:
-      - Presentation/.../Controllers/UserController.cs (GetFuncionarioAccess, RemoveRole, AddRole)
-    fix: "[Authorize(Roles = Roles.Administrador)] adicionado nos 3 endpoints de role management."
-    priority: alta
-
-  - id: CS024
-    severity: high
-    category: security
-    status: fixed
-    fixed_in: "branch checkin-48h-timezone / main (2026-07-03)"
-    description: >
-      Forbid(string) em 4 controllers interpretava o argumento como nome de esquema de
-      autenticação, não como mensagem — lançava exceção 'No authentication handler registered
-      for scheme X' em produção, expondo stack trace e quebrando o fluxo de autenticação.
-    files:
-      - Presentation/.../Controllers/UserController.cs (2x Forbid)
-      - Presentation/.../Controllers/ClienteController.cs (2x Forbid)
-      - Presentation/.../Controllers/OrderServiceController.cs (1x Forbid)
-      - Presentation/.../Controllers/ScheduleController.cs (3x Forbid)
-    fix: "Substituído por Unauthorized(new { error = '...' }) ou StatusCode(403, new { error = '...' }) conforme o contexto."
-    priority: alta
-
-  - id: CS025
-    severity: high
-    category: business_rule
-    status: fixed
-    fixed_in: "branch checkin-48h-timezone / main (2026-07-03)"
-    description: >
-      Regra das 48h para check-in usava DateTime.Now que em Azure (UTC+0) retorna UTC,
-      não horário de Brasília (UTC-3). Resultado: check-ins bloqueados 3h antes do prazo
-      real, impedindo fisioterapeutas de registrar dentro do prazo correto.
-    files:
-      - Application/.../Services/OrderServiceSessionService.cs
-    fix: >
-      Adicionado método Agora() que usa TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz)
-      com ID de timezone condicional: 'E. South America Standard Time' (Windows) /
-      'America/Sao_Paulo' (Linux/Azure). Sempre usar Agora() para lógica de negócio temporal.
-    pattern: "Para qualquer regra de negócio com horário Brasil: usar Agora() ou equivalente, nunca DateTime.Now direto."
-    priority: alta
-
-  - id: CS026
-    severity: medium
-    category: business_rule
-    status: fixed
-    fixed_in: "branch feature/employee-user-access-management / master (2026-07-03)"
-    description: >
-      Botão de check-in no Calendar.tsx usava condição '&& !userHasRole(COORDENADOR_FISIOTERAPEUTA)'
-      para determinar se devia aplicar a regra das 48h — excluindo CoordenadorFisioterapeuta
-      da restrição. Coordenador conseguia clicar check-in após 48h; backend rejeitava com 409.
-    files:
-      - Instituto_Barros_Front/.../src/pages/Calendar.tsx
-    fix: "Condição alterada para '||' — ambos os perfis (Fisioterapeuta e CoordenadorFisioterapeuta) seguem a regra."
-    priority: media
-
-  - id: CS027
-    severity: high
-    category: performance
-    status: fixed
-    fixed_in: "branch perf/ordem-servico-customer-summary / master (2026-07-03)"
-    description: >
-      Tela /ordem-servico chamava GET /api/Customer/GetAll (payload completo com histórico,
-      serviços e sessões de todos os pacientes) apenas para preencher um dropdown de seleção.
-      Em produção com volume real de dados causava timeout >30s e cancelamento pelo cliente.
-    fix: "Substituído por GET /api/Customer/GetAllSummary (somente id, nome, telefone). GetAll mantido para telas que precisam do payload completo."
-    priority: alta
-
-  - id: CS028
-    severity: high
-    category: performance
-    status: fixed
-    fixed_in: "branch feature/employee-user-access-management / main (2026-07-03)"
-    description: >
-      CustomerDataRepository.GetAll usava um único DbContext por tipo de relacionamento
-      (ctxHistorico, ctxServicos) e disparava múltiplas queries simultâneas sobre ele via
-      Task.WhenAll — violação direta da regra 'DbContext não é thread-safe'. Resultado:
-      'A second operation was started on this context instance' em produção.
-    files:
-      - Infrastructure/.../Repositories/CustomerDataRepository.cs
-    fix: >
-      Cada chunk do Chunk(2000) cria seu próprio scope via IServiceScopeFactory e obtém
-      uma instância independente de InstitutoContext. Nunca compartilhar DbContext entre
-      tasks paralelas.
-    pattern: "Para Task.WhenAll com EF Core: sempre um scope/DbContext por task, nunca compartilhar."
-    priority: alta
 
   # ── CREDENCIAIS EXPOSTAS NO REGISTRY ─────────────────────────────────────────
 
   - id: SEC001
     severity: critical
     category: security
-    status: open
     description: >
-      Este arquivo (architecture-registry.yaml) contém credenciais reais em texto claro:
+      Este arquivo contém credenciais reais em texto claro:
       - shared_platform.databases.redis.credential: senha Redis do n8n
       - services[bot].variables_config.TokenWhatsapp: token da Evolution API
-      Qualquer acesso ao repositório onde este arquivo for commitado expõe estas credenciais.
-    affected_values:
-      - "redis credential: xqvQlycVWIScu8gU (linha ~707)"
-      - "TokenWhatsapp: EDD17B1B6B1A-4204-9BB9-40BFEE8F8C44 (linha ~683)"
     fix: >
-      1. Substituir os valores por placeholders: '<REDIS_PASSWORD>' e '<EVOLUTION_API_TOKEN>'.
-      2. Armazenar os valores reais em vault (Azure Key Vault, GitHub Secrets ou .env local não commitado).
-      3. Revogar e regenerar os tokens expostos (assumir comprometidos).
-      4. Garantir que o repositório de arquitectura seja PRIVADO.
+      1. Substituir por placeholders '<REDIS_PASSWORD>' e '<EVOLUTION_API_TOKEN>'.
+      2. Armazenar em vault (Azure Key Vault, GitHub Secrets).
+      3. Revogar e regenerar tokens expostos.
+      4. Garantir repositório PRIVADO.
     priority: critica
-
-  # ── MELHORIAS DE PADRÃO ESTABELECIDAS NESTA SESSÃO ───────────────────────────
 
 patterns_established:
   - id: PAT001
