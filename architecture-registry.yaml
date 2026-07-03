@@ -1,0 +1,1371 @@
+# ARCHITECTURE REGISTRY - Instituto Barros
+# Fonte de verdade do ecossistema técnico.
+# Consumido por: Agentes IA (OpenCode) para geração de código, specs e tarefas.
+# Atualizar sempre que: novas entidades, rotas, módulos, permissões ou infra forem adicionados.
+#
+# Última atualização: 2026-07-03
+#   2026-07-03: UserController +3 endpoints role management; CustomerDataRepository perf (pagination,
+#               Task.WhenAll per-chunk, AsNoTracking, AsSplitQuery, Chunk 2000); GetAllCustomerSummary;
+#               FormEmployee carrega acesso existente + remove role; página /documentacao;
+#               fix timezone BR; fix Forbid(); fix 48h CoordenadorFisioterapeuta; fix concurrent DbContext.
+#               Novos apontamentos: CS023–CS028. Itens resolvidos marcados como [FIXED].
+#   2026-04-21: Code review completo: AV001–AV010, CS001–CS022
+
+organization:
+  name: Instituto Barros
+  domain: Clínica de Fisioterapia
+  units:
+    - Morumbi
+    - Mooca
+    - Paulista
+    - Ipiranga
+  environments:
+    - name: development
+      api_url: http://localhost:8080
+      admin_url: http://localhost:5173
+      portal_url: http://localhost:3000
+    - name: production
+      api_url: https://instituto-barros-sistema.azurewebsites.net  # Azure Web App
+      admin_url: https://sistema-instituto.vercel.app
+      portal_url: https://instituto-barros-portal-cliente.vercel.app
+
+# ─────────────────────────────────────────────
+# SERVIÇOS / APLICAÇÕES
+# ─────────────────────────────────────────────
+services:
+
+  # ── 1. API BACKEND ────────────────────────────────────────────────────────────
+  - name: instituto-barros-api
+    type: api
+    description: >
+      API REST central do Instituto Barros. Expõe todos os endpoints de negócio:
+      gestão de pacientes, funcionários, filiais, agendamentos, ordens de serviço,
+      sessões, financeiro, notificações, WhatsApp e autenticação.
+    language: C# .NET 8.0
+    architecture: DDD (Domain-Driven Design) + Clean Architecture
+    path: Instituto_Barros_Sistema/
+    solution: Instituto_Barros_Sistema.sln
+    swagger: /swagger/index.html  # disponível apenas em Development e QA
+    docker_image: tecnologiainstitutobarrros/sistema-instituto
+    deployed_at: Azure Web App (instituto-barros-sistema)
+
+    layers:
+      domain:
+        path: src/Domain/DomainDrivenDesign.Domain/
+        entities:
+          - name: BaseModel
+            description: Classe base herdada por todas entidades. Contém Id (Guid, SequentialGuid), DataCadastro (default GETDATE()), DataDesativacao (soft-delete nullable).
+          - name: UserModel
+            table: UsuariosData (AspNetUsers via Identity)
+            fields: [Id, UserName, Email, PasswordHash, Roles, NormalizedEmail, ...]
+          - name: CustomerModel
+            table: Customer
+            fields: [Id, Nome, Email?, CPF, RG?, NrTelefone, DataNascimento, IsEstrangeiro, Endereco(FK), DataCadastro, DataDesativacao]
+          - name: HistoryCustomerModel
+            table: HistoryCustomer
+            fields: [Id, CustomerId(FK), Descricao, DataCadastro]
+          - name: BranchOfficeModel
+            table: BranchOfficeService
+            fields: [Id, Nome, Cidade, Estado, Endereco, DataCadastro, DataDesativacao]
+          - name: EmployeeModel
+            table: Employee
+            fields: [Id, Nome, Email, NrTelefone, Cargo, DataNascimento, ContatoEmergencial, Cor(hex), BranchOfficeId(FK), UserId(FK), DataCadastro, DataDesativacao]
+          - name: CategoryServiceModel
+            table: CategoryService
+            fields: [Id, Nome, Descricao, DataCadastro, DataDesativacao]
+          - name: SubCategoryServiceModel
+            table: SubCategoryService
+            fields: [Id, Nome, Descricao, Valor, CategoryServiceId(FK), DataCadastro, DataDesativacao]
+          - name: OrderServiceModel
+            table: OrderService
+            fields: [Id, CustomerId(FK), BranchOfficeId(FK), SubCategoryServiceId(FK), EmployeeId(FK), Status(EOrderServiceStatus), TotalSessoes, SessoesRealizadas, Observacoes, DataCadastro, DataDesativacao]
+          - name: OrderServiceSessionModel
+            table: OrderServiceSessions
+            fields: [Id, OrderServiceId(FK), EmployeeId(FK), DataSessao, HoraInicio, HoraFim, Status(ESessionStatus), Observacoes, DataCadastro]
+          - name: ScheduleModel
+            table: Schedule
+            fields: [Id, Titulo, DataInicio, DataFim, HoraInicio, HoraFim, BranchOfficeId(FK), Status(EScheduleStatus), IsAvaliacao, DataCadastro, DataDesativacao]
+          - name: ScheduleParticipantModel
+            table: ScheduleParticipants
+            fields: [Id, ScheduleId(FK), EmployeeId(FK), CustomerId(FK)?, DataCadastro]
+          - name: NotificationModel
+            table: Notifications
+            fields: [Id, Titulo, Mensagem, TipoNotificacao(ENotificationType), OrderServiceId(FK)?, DataCadastro, DataDesativacao]
+          - name: NotificationUserViewModel
+            table: NotificationUserViews
+            fields: [Id, NotificationId(FK), UserId, VisualizadoEm, DataCadastro]
+          - name: FinancialTransactionModel
+            table: TransacoesFinanceiras
+            fields: [Id, Descricao, Valor, FormaPagamento(EPaymentMethod), Status(EFinanceiroStatus), BranchOfficeId(FK), OrderServiceId(FK)?, DataTransacao, DataCadastro, DataDesativacao]
+          - name: InstallmentModel
+            table: Parcelas
+            fields: [Id, FinancialTransactionId(FK), NumeroParcela, Valor, DataVencimento, Status(EFinanceiroStatus), DataPagamento?, DataCadastro]
+          - name: LogModel
+            table: Logs
+            fields: [Id, UserId, UserName, Acao, Entidade, EntidadeId, Detalhes, DataCadastro]
+          - name: WhatsappNumberModel
+            table: WhatsappNumbers
+            fields: [Id, NomeInstancia, Numero, FilialId(FK)?, Ativo, TokenInstancia(encrypted-AES256), UltimaConexao?, MetadadosJson(encrypted-AES256)?, DataCadastro, DataDesativacao]
+          - name: WhatsappConversationModel
+            table: WhatsappConversations
+            fields: [Id, WhatsappNumberId(FK), CustomerId(FK)?, NrTelefoneCliente, NomeContato, Status(EWhatsappConversationStatus), TipoAtendimento(ETipoAtendimentoWhatsapp)?, EsteiraBot?, MensagensNaoLidas, MetadadosJson(encrypted-AES256)?, DataCadastro, DataDesativacao]
+          - name: WhatsappMessageModel
+            table: WhatsappMessages
+            fields: [Id, WhatsappConversationId(FK), MessageId, Conteudo, TipoMidia?, UrlMidia?, EnviadaPelaClinica, Status(EWhatsappMessageStatus), DataMensagem, DataCadastro]
+
+        enumerations:
+          - EOrderServiceStatus: [Ativo, Concluido, Cancelado]
+          - ESessionStatus: [Agendada, Realizada, Cancelada, NaoCompareceu]
+          - EScheduleStatus: [Agendado, Confirmado, Cancelado, Realizado]
+          - EPaymentMethod: [Dinheiro, Cartao, Pix, Boleto, Convenio, Misto]
+          - EFinanceiroStatus: [Pendente, Pago, Cancelado, Vencido]
+          - ENotificationType: [Geral, AgendamentoProximo, SessaoIniciada, PagamentoPendente]
+          - EWhatsappConversationStatus: [Ativa, Encerrada, Aguardando]
+          - ETipoAtendimentoWhatsapp: [Reabilitacao, Prevencao, Recovery, Agendamento, Informacoes, NenhumServico]
+          - EWhatsappMessageStatus: [Enviada, Entregue, Lida, Falha]
+
+        interfaces:
+          repositories:
+            - IManagerUserDataRepository
+            - ICustomerDataRepository
+            - IHistoryCustomerDataRepository
+            - ICategoryServiceDataRepository
+            - ISubCategoryServiceDataRepository
+            - IOrderServiceDataRepository
+            - IOrderServiceSessionDataRepository
+            - IServiceDataRepository
+            - IEmployeeServiceDataRepository
+            - IBranchOfficeServiceDataRepository
+            - IScheduleDataRepository
+            - IScheduleParticipantDataRepository
+            - IDashboardDataRepository
+            - INotificationDataRepository
+            - IFinancialTransactionDataRepository
+            - IInstallmentDataRepository
+            - ILogDataRepository
+            - IWhatsappNumberDataRepository
+            - IWhatsappConversationDataRepository
+          services:
+            - IManagerUserDataService
+            - ICustomerDataService
+            - ICategoryServiceDataService
+            - ISubCategoryServiceDataService
+            - IOrderServiceDataService
+            - IOrderServiceSessionDataService
+            - IServiceServiceDataService
+            - IEmployeeServiceDataService
+            - IBranchOfficeServiceDataService
+            - IScheduleDataService
+            - IScheduleParticipantDataService
+            - IDashboardDataService
+            - INotificationDataService
+            - IFinancialTransactionDataService
+            - IInstallmentDataService
+            - ILogDataService
+            - IWhatsappNumberDataService
+            - IWhatsappConversationDataService
+
+      infrastructure:
+        path: src/Infrastructure/
+        context: InstitutoContext (extends IdentityDbContext<UserModel>)
+        migrations_assembly: DomainDrivenDesign.Infrastructure.Data
+        repositories_path: src/Infrastructure/DomainDrivenDesign.Infrastructure.Data/Repositories/
+        mappers_path: src/Application/DomainDrivenDesign.Application/Mapper/  # ATENÇÃO: mappers EF ficam em Application
+        migrations_count: 30+  # último: AddOrderServiceIdToNotifications (2026-03)
+
+        # PADRÃO CRÍTICO - Sempre seguir em novos mappers:
+        mapper_patterns:
+          pk: HasKey(x => x.Id) + HasValueGenerator<SequentialGuidValueGenerator>()
+          data_cadastro: HasDefaultValueSql("GETDATE()")
+          soft_delete: DataDesativacao nullable, sem filtro global automático
+          encryption: DatabaseEncryptionHelper.EncryptField/DecryptField em HasConversion para campos sensíveis
+
+        # PADRÃO CRÍTICO - Repositórios:
+        repository_patterns:
+          base: RepositoryBase<T> (herança obrigatória)
+          save_changes: Create/Update/Delete NÃO chamam SaveChangesAsync — Domain Service chama explicitamente
+
+      application:
+        path: src/Application/DomainDrivenDesign.Application/
+        services:
+          - ManagerUserService (IManagerUserService)
+          - CustomerService (ICustomerService)
+          - CategoryService (ICategoryService)
+          - SubCategoryService (ISubCategoryService)
+          - OrderServiceService (IOrderServiceService)
+          - OrderServiceSessionService (IOrderServiceSessionService)
+          - EmployeeService (IEmployeeService)
+          - BranchOfficeService (IBranchOfficeService)
+          - ScheduleService (IScheduleService)
+          - ScheduleParticipantService (IScheduleParticipantService)
+          - DashboardService (IDashboardService)
+          - NotificationService (INotificationService)
+          - FinancialTransactionService (IFinancialTransactionService)
+          - InstallmentService (IInstallmentService)
+          - LogService (ILogService)
+          - AuditLogService (IAuditLogService)
+          - SecurePasswordRecoveryService (ISecurePasswordRecoveryService)
+          - SessionManagementService (ISessionManagementService) — Singleton
+          - CustomerAccessService (ICustomerAccessService) — TEMPORÁRIO
+          - WhatsappNumberService (IWhatsappNumberService)
+          - WhatsappConversationService (IWhatsappConversationService)
+        helpers:
+          - DatabaseEncryptionHelper: AES-256 CBC. Métodos: EncryptField(string?), DecryptField(string?). Registrado como Singleton.
+          - EmailHelper
+          - FormatHelper
+          - InputSanitizationHelper
+        validators:  # FluentValidation
+          - UserCreateValidator, UserLoginValidator, ClienteLoginValidator
+          - CustomerValidator, CustomerUpdateProfileValidator
+          - CategoryServiceValidator, BranchOfficeValidator, EmployeeValidador
+          - NotificationRequestDtoValidator, NotificationHistoryRequestValidator
+          - FinancialTransactionRequestDtoValidator, LogRequestDtoValidator
+          - CustomerAccessValidator
+          - SolicitarResetSenhaValidator, ResetPasswordValidator
+          - CreateAppointmentValidator, CancelAppointmentValidator
+        automapper:
+          profile: MapperProfile (src/Application/DomainDrivenDesign.Application/ResolveMapper/)
+
+      presentation:
+        path: src/Presentation/DomainDriveDesign.Presentation.Api/
+        base_controller: MainController  # expõe UserId, UserName
+        middleware:
+          - SecurityHeadersMiddleware  # headers de segurança HTTP
+          - InputValidationMiddleware  # sanitização de inputs
+          - AntiForgeryMiddleware     # proteção CSRF (header X-CSRF-Token)
+        global_filter: GlobalExceptionFilter
+        converters: [DateOnlyConverter, TimeOnlyConverter]
+
+    controllers:
+      # Formato: route | method | auth | description
+      - controller: UserController
+        route: /Api/User
+        endpoints:
+          - "GET    /SearchUser                     | Authorize (qualquer role) | Busca usuário por email ou id"
+          - "POST   /RegisterUser                   | AllowAnonymous            | Cria novo usuário (⚠ AV008: deveria exigir Administrador)"
+          - "POST   /LoginUser                      | AllowAnonymous            | Login com email/senha → JWT + HttpOnly cookie"
+          - "POST   /LoginCliente                   | AllowAnonymous            | Login de cliente com CPF/senha"
+          - "POST   /SolicitarResetSenha            | AllowAnonymous            | Solicita reset de senha por email"
+          - "POST   /ResetarSenha                   | AllowAnonymous            | Confirma reset com token"
+          - "GET    /GetCsrfToken                   | AllowAnonymous            | Retorna token CSRF"
+          - "GET    /FuncionarioAccess/{funcionarioId} | Authorize              | Retorna userId, userName, email e roles do usuário vinculado ao funcionário (⚠ CS023: sem restrição de role — qualquer autenticado acessa)"
+          - "DELETE /{userId}/Role/{role}           | Authorize                 | Remove uma role do usuário (⚠ CS023: sem restrição de role)"
+          - "POST   /{userId}/Role/{role}           | Authorize                 | Adiciona uma role ao usuário (⚠ CS023: sem restrição de role)"
+
+      - controller: CustomerController
+        route: /api/Customer
+        roles: [Administrador, Administrativo, Comercial, Fisioterapeuta, Funcionario, CoordenadorFisioterapeuta]
+        endpoints:
+          - "GET    /GetAll                | Listagem de pacientes com filtros (page?, pageSize? opcionais). Backward-compatible sem paginação."
+          - "GET    /GetAllSummary         | Listagem leve (id, nome, telefone). Usar para selects/dropdowns — evita timeout de produção."
+          - "GET    /GetById/{id}          | Busca paciente por ID"
+          - "POST   /Create               | Cria paciente"
+          - "PUT    /Update/{id}          | Atualiza paciente"
+          - "DELETE /Delete/{id}          | Soft-delete paciente"
+
+      - controller: BranchOfficeController
+        route: /api/BranchOffice
+        roles: [Administrador, Administrativo]
+        endpoints:
+          - "GET    /GetAll               | Lista filiais"
+          - "POST   /Create               | Cria filial"
+          - "PUT    /Update/{id}          | Atualiza filial"
+          - "DELETE /Delete/{id}          | Remove filial"
+
+      - controller: EmployeeController
+        route: /api/Employee
+        roles: [Administrador, Administrativo, Comercial, Fisioterapeuta, Funcionario, CoordenadorFisioterapeuta, Financeiro]
+        endpoints:
+          - "GET    /GetAll               | Lista funcionários"
+          - "POST   /Create               | Cria funcionário"
+          - "PUT    /Update/{id}          | Atualiza funcionário"
+          - "DELETE /Delete/{id}          | Remove funcionário"
+
+      - controller: CategoryServiceController
+        route: /api/CategoryService
+        roles: [Administrador, Administrativo]
+
+      - controller: SubCategoryController
+        route: /api/SubCategory
+        roles: [Administrador, Administrativo, Comercial]
+
+      - controller: OrderServiceController
+        route: /api/OrderService
+        roles: [Administrador, Administrativo, Comercial, Fisioterapeuta, Funcionario, CoordenadorFisioterapeuta]
+
+      - controller: SessionServiceController
+        route: /api/SessionService
+        endpoints:
+          - "GET    /GetAll               | Lista sessões"
+          - "POST   /Create               | Cria sessão"
+          - "PUT    /Update/{id}          | Atualiza sessão"
+          - "GET    /DailySummary         | Resumo diário de sessões por fisioterapeuta"
+
+      - controller: ScheduleController
+        route: /api/Schedule
+        rate_limit: "10 GET/30s, write sem limite"
+        endpoints:
+          - "GET    /GetAll               | Lista agendamentos (com filtro por employee)"
+          - "POST   /Create               | Cria agendamento"
+          - "PUT    /Update/{id}          | Atualiza agendamento"
+          - "DELETE /Delete/{id}          | Remove agendamento"
+
+      - controller: ScheduleParticipantController
+        route: /api/ScheduleParticipant
+
+      - controller: DashboardController
+        route: /api/Dashboard
+        rate_limit: "20 req/30s"
+        endpoints:
+          - "GET /FaturamentoMensal       | Faturamento mensal por período"
+          - "GET /FaturamentoComparativo  | Comparativo entre períodos"
+          - "GET /DespesasResumo         | Resumo de despesas"
+          - "GET /EntradaSaida           | Entradas vs saídas"
+          - "GET /TiposPagamento         | Breakdown por forma de pagamento"
+          - "GET /ServicoReceita         | Receita por tipo de serviço"
+          - "GET /UnidadesTransacao      | Performance por unidade"
+          - "GET /Patologias             | Distribuição de patologias"
+          - "GET /SessoesMensais         | Sessões mensais por fisioterapeuta"
+          - "GET /SessoesDiarias         | Resumo diário de sessões"
+
+      - controller: TransactionsController
+        route: /api/Transactions
+        roles: [Administrador, Financeiro]
+
+      - controller: InstallmentsController
+        route: /api/Installments
+        roles: [Administrador, Financeiro]
+
+      - controller: NotificationsController
+        route: /api/Notifications
+        endpoints:
+          - "GET    /GetAll               | Lista notificações"
+          - "POST   /Send                 | Envia notificação"
+          - "GET    /History              | Histórico de notificações com filtros"
+          - "PATCH  /MarkAsRead/{id}      | Marca como lida"
+
+      - controller: LogsController
+        route: /api/Logs
+        roles: [Administrador]
+
+      - controller: ClienteController
+        route: /api/Cliente
+        description: Endpoints exclusivos do Portal Cliente (Next.js)
+        endpoints:
+          - "POST /LoginCliente           | Login com CPF (redirecionado para UserController)"
+          - "GET  /GetPerfil              | Perfil do cliente autenticado"
+          - "PUT  /UpdatePerfil           | Atualiza perfil (nome, email, telefone)"
+          - "GET  /GetAgendamentos        | Agendamentos do cliente"
+          - "POST /SolicitarAgendamento   | Solicita agendamento"
+          - "POST /CancelarAgendamento    | Cancela agendamento"
+
+      - controller: CustomerAccessController
+        route: /api/CustomerAccess
+        roles: [Administrador, Administrativo]
+        description: "TEMPORÁRIO - Sistema de criação automática de acesso para clientes"
+
+      - controller: WhatsappController
+        route: /api/Whatsapp
+        roles: [Administrador, Comercial, Administrativo]
+        endpoints:
+          - "POST  /ReceberMensagem       | Chamado pelo n8n ao receber/enviar mensagem. Cria/atualiza conversa automaticamente."
+          - "GET   /GetConversas          | Lista conversas ativas. Query: whatsappNumberId?"
+          - "GET   /GetMensagens/{id}     | Lista mensagens de uma conversa"
+          - "PATCH /MarcarComoLida/{id}   | Zera contador MensagensNaoLidas de uma conversa"
+
+      - controller: WhatsappNumberController
+        route: /api/WhatsappNumber
+        roles:
+          read: [Administrador, Comercial, Administrativo]
+          write: [Administrador]
+        endpoints:
+          - "POST   /Register             | Cadastra novo número/instância WhatsApp"
+          - "GET    /GetAll               | Lista todos os números"
+          - "PUT    /Update/{id}          | Atualiza dados do número"
+          - "PATCH  /ToggleActive/{id}    | Ativa/desativa número"
+
+    auth:
+      provider: ASP.NET Identity + JWT Bearer
+      token_delivery: HttpOnly cookie (nome: AccessToken)
+      expiry: 1 hora
+      cookie_options: [HttpOnly, Secure, SameSite=Strict]
+      csrf: X-CSRF-Token header (endpoint GET /Api/User/GetCsrfToken)
+      roles:
+        - Cliente            # acesso ao Portal Cliente
+        - Administrador      # acesso total
+        - Funcionario        # acesso operacional básico
+        - Comercial          # acesso comercial + WhatsApp
+        - Fisioterapeuta     # acesso clínico (próprios agendamentos)
+        - Administrativo     # acesso administrativo
+        - CoordenadorFisioterapeuta  # fisioterapeuta com visão de todos
+        - Financeiro         # acesso ao módulo financeiro
+
+    rate_limiting:
+      provider: .NET RateLimiter (PartitionedRateLimiter, per-IP)
+      rules:
+        - endpoint: Login (POST /Api/User/LoginUser, LoginCliente)
+          limit: 5 req / 5 min
+        - endpoint: SolicitarResetSenha
+          limit: 3 req / 1 hora
+        - endpoint: RegisterUser
+          limit: 3 req / 1 hora
+        - endpoint: Schedule (GET)
+          limit: 10 req / 30s
+        - endpoint: Dashboard
+          limit: 20 req / 30s
+        - endpoint: BranchOffice, Employee, Cliente, SessionService, OrderService
+          limit: sem limite
+        - endpoint: demais
+          limit: 7 req / 30s
+
+    database:
+      - provider: sqlserver
+        connection_key: DefaultConnection
+        context: InstitutoContext
+        tables:
+          - Customer, HistoryCustomer
+          - UsuariosData (AspNetUsers + Identity tables)
+          - CategoryService, SubCategoryService
+          - OrderService, OrderServiceSessions
+          - Schedule, ScheduleParticipants
+          - BranchOfficeService, Employee
+          - Notifications, NotificationUserViews
+          - TransacoesFinanceiras, Parcelas
+          - Logs
+          - WhatsappNumbers, WhatsappConversations, WhatsappMessages  # pendente migration AddWhatsappModule
+
+      - provider: mongodb
+        connection_key: MongoConnection
+        database: leads
+        use_case: Base de leads capturados pelo bot n8n (WhatsApp)
+
+    encryption:
+      algorithm: AES-256 CBC
+      helper: DatabaseEncryptionHelper (Singleton)
+      encrypted_fields:
+        - WhatsappNumberModel.TokenInstancia
+        - WhatsappNumberModel.MetadadosJson
+        - WhatsappConversationModel.MetadadosJson
+
+    security:
+      middlewares:
+        - SecurityHeadersMiddleware: HSTS, X-Content-Type-Options, X-Frame-Options, CSP, Referrer-Policy
+        - InputValidationMiddleware: sanitização com DOMPurify-style server-side
+        - AntiForgeryMiddleware: validação de token CSRF
+      cors:
+        origins:
+          - http://localhost:3000
+          - http://localhost:5173
+          - https://sistema-instituto.vercel.app
+          - https://instituto-barros-portal-cliente.vercel.app
+        methods: [GET, POST, PUT, DELETE, PATCH, OPTIONS]
+        headers: [Content-Type, Authorization, X-Requested-With]
+
+    ci_cd:
+      provider: GitHub Actions
+      workflow: .github/workflows/instituto_barros.yml
+      pipeline:
+        - trigger: push to main
+        - build: Docker image (alpine)
+        - push: Docker Hub (tecnologiainstitutobarrros/sistema-instituto:{sha})
+        - deploy: Azure Web App (instituto-barros-sistema, slot Production)
+
+    deployment:
+      platform: Azure Web App (container)
+      containerization: Docker (mcr.microsoft.com/dotnet/aspnet:8.0-alpine)
+      port: 80 (container) / HTTPS via Azure
+
+  # ── 2. SISTEMA ADMINISTRATIVO (Frontend) ────────────────────────────────────
+  - name: instituto-barros-admin
+    type: frontend
+    description: >
+      Painel administrativo da clínica. Usado por funcionários, fisioterapeutas,
+      coordenadores, comercial, administrativo e financeiro. Consome a API backend.
+    framework: React 18 + Vite + TypeScript
+    path: Instituto_Barros_Front/FrontEnd_Instituto_Barros/FrontEnd_Instituto_Barros/
+    deployed_at: Vercel (https://sistema-instituto.vercel.app)
+    dev_port: 5173
+
+    dependencies:
+      ui: [TailwindCSS v4, Lucide React, Apexcharts, React Apexcharts]
+      state: [Zustand v5]
+      http: [Axios v1.8]
+      routing: [React Router v7]
+      calendar: [FullCalendar v6 (daygrid, timegrid, list, interaction)]
+      forms: [React Input Mask, React Number Format, React Select, React Dropzone]
+      utilities: [date-fns, DOMPurify, jwt-decode, clsx, Flatpickr]
+
+    routes:
+      public:
+        - /signin        → SignIn
+        - /signup        → SignUp
+      protected:  # requer JWT válido (ProtectedRoute)
+        - /              → DashboardRedirect (redireciona por role)
+        - /dashboard-operacao     → DashboardOperacao          [todos]
+        - /dashboard-lead         → DashboardLead              [Adm, Adm, Comercial, Func]
+        - /profile                → UserProfiles               [todos]
+        - /calendar               → Calendar                   [todos]
+        - /customer               → CustomerTables             [todos]
+        - /form-employee          → EmployeeTables             [Adm, Adm, Comercial, Func]
+        - /form-branch            → BranchOfficeTables         [Adm, Adm]
+        - /form-cat-servico       → ServiceCategoryTables      [Adm, Adm]
+        - /form-sub-cat-servico   → SubServiceCategoryTable    [Adm, Adm, Comercial]
+        - /ordem-servico          → OrdemServiceTables         [todos]
+        - /basic-tables           → WhatsApp Atendimentos      [Adm, Adm, Comercial]
+        - /whatsapp/config        → WhatsappConfigPage         [Adm apenas]
+        - /financeiro/despesas    → Despesas                   [Adm, Financeiro]
+        - /notificacoes/enviar    → Notifications              [Adm apenas]
+        - /notificacoes/historico → Historico                  [todos]
+        - /logs                   → Log                        [Adm apenas]
+        - /customer-access        → CustomerAccessPage         [Adm, Adm] (TEMPORÁRIO)
+        - /gestao/gerenciar-checkins → GerenciarCheckIns       [Adm apenas]
+        - /documentacao           → Documentacao               [todos — filtrado por role no frontend]
+
+    state_management:
+      stores: [authStore, filterStore, modalStore, uiStore]  # Zustand
+      contexts: [SidebarContext, ThemeContext, FisioterapeutaContext]
+
+    services:
+      base: BaseApiService (src/services/api/BaseApiService.ts)
+      http_client: AxioService (src/services/service/AxioService.ts)
+      api_services:
+        - AuthService
+        - CustomerService / CustomerService.refactored
+        - BranchOfficeService / BranchOfficeService.refactored
+        - EmployeeService / EmployeeService.refactored
+        - OrderServiceService / OrderServiceService.refactored
+        - ScheduleService / ScheduleService.refactored
+        - ScheduleParticipantService / ScheduleParticipantService.refactored
+        - ServiceCategoryService / ServiceCategoryService.refactored
+        - SubCategoryService / SubCategoryService.refactored
+        - SessionService / SessionService.refactored
+        - DashboardService / DashboardService.refactored
+        - DespesaService / DespesaService.refactored
+        - FinancialTransactionService / FinancialTransactionService.refactored
+        - NotificationService / NotificationService.refactored
+        - CustomerAccessService / CustomerAccessService.refactored
+        - WhatsappService  # src/services/WhatsappService.ts (sem versão refactored ainda)
+        - LogService       # src/services/LogService.ts
+        - UserService      # src/services/service/UserService.ts — getUserAccessByFuncionarioId, removeRole, addRole
+      polling:
+        - WhatsApp conversas: 30s
+        - WhatsApp config (números): 60s
+
+    key_components:
+      calendar:
+        - CalendarView, CalendarFiltersPanel, CalendarEventModals
+      dashboard:
+        - FaturamentoMetrics, DespesasMetrics, TransactionsMetrics
+        - MonthlySalesChart, MonthlySessionsChart, FaturamentoComparativo
+        - UnidadesPieChart, ServicosPieChart, PatologiasPieChart
+        - FisioterapeutasBarChart, FisioterapeutasPieChart
+        - PerformanceUnidades, DemographicCard
+      whatsapp:
+        - WhatsappTableLeadComponent (lista conversas, polling 30s, marcar como lida)
+        - message.tsx (bolhas de mensagem com suporte a mídia, separadores de data)
+        - WhatsappConfigPage (CRUD números, health check por UltimaConexao, polling 60s)
+      tables:
+        - CustomerGrid, EmployeeGrid, BranchOfficeGrid
+        - OrdemServiceGrid, SessionsGrid
+        - ServiceCategoryGrid, SubServiceCategoryGrid
+        - DespesasGrid, LogsGrid
+
+    permissions_map:  # src/services/util/rolePermissions.ts
+      DASHBOARD:             [Adm, Adm, Comercial, Fisio, Func, CoordenadorFisio, Financeiro]
+      AGENDA:                [Adm, Adm, Comercial, Fisio, Func, CoordenadorFisio]
+      WHATSAPP:              [Adm, Adm, Comercial]
+      WHATSAPP_CONFIG:       [Adm apenas]
+      PACIENTES:             [Adm, Adm, Fisio, Func, CoordenadorFisio]
+      FUNCIONARIOS:          [todos exceto Cliente]
+      UNIDADES:              [Adm, Adm]
+      CATEGORIA_SERVICO:     [Adm, Adm]
+      SUB_CATEGORIA_SERVICO: [Adm, Adm, Comercial]
+      TRATAMENTO_SESSAO:     [Adm, Adm]
+      DASHBOARD_FINANCEIRO:  [Adm, Adm, Comercial, Func, Financeiro]
+      DASHBOARD_OPERACAO:    [todos exceto Cliente]
+      DASHBOARD_LEAD:        [Adm, Adm, Comercial, Func]
+      FINANCEIRO:            [Adm, Financeiro]
+      FINANCEIRO_DESPESAS:   [Adm, Financeiro]
+      NOTIFICACOES:          [todos exceto Cliente]
+      NOTIFICACOES_ENVIAR:   [Adm apenas]
+      LOGS:                  [Adm apenas]
+      CUSTOMER_ACCESS:       [Adm, Adm]
+      GERENCIAR_CHECKINS:    [Adm apenas]
+      DOCUMENTACAO:          [todos — conteúdo filtrado por role via JWT no frontend]
+
+  # ── 3. PORTAL CLIENTE ───────────────────────────────────────────────────────
+  - name: instituto-barros-portal-cliente
+    type: frontend
+    description: >
+      Portal self-service para pacientes da clínica. Permite login com CPF,
+      visualização de perfil, histórico de agendamentos, solicitação e cancelamento
+      de consultas, e reset de senha por email.
+    framework: Next.js 16 + TypeScript + TailwindCSS v3
+    path: PortalCliente/
+    deployed_at: Vercel (https://instituto-barros-portal-cliente.vercel.app)
+    dev_port: 3000
+
+    dependencies:
+      ui: [TailwindCSS v3, Lucide React, Next Themes]
+      http: [Axios v1.13]
+      calendar: [FullCalendar v6]
+      validation: [Zod v4]
+      utilities: [dayjs, clsx, Flatpickr, Swiper]
+
+    key_pages:
+      auth: [/auth/signin, /auth/signup]
+      main:
+        - / → home/dashboard do paciente
+        - /plano → planos de tratamento
+        - /profile → perfil do paciente
+        - /calendar → calendário de agendamentos
+        - /confirmacao-solicitacao → confirmação de agendamento
+
+    auth:
+      login_method: CPF + senha
+      endpoint: POST /Api/User/LoginCliente
+      password_reset:
+        step1: POST /Api/User/SolicitarResetSenha (CPF + Email)
+        step2: POST /Api/User/ResetarSenha (UserId + token + nova senha)
+
+    services_path: PortalCliente/src/services/
+
+  # ── 4. SITE INSTITUCIONAL ───────────────────────────────────────────────────
+  - name: instituto-barros-site
+    type: frontend
+    description: >
+      Site institucional público do Instituto Barros. Apresenta a clínica,
+      serviços, equipe, unidades e galeria. Sem integração com a API.
+    framework: React 19 + Vite + TypeScript + TailwindCSS v3
+    path: Site/
+    dev_port: não definido
+
+    pages:
+      - Home: hero, serviços, sobre, equipe, instalações, galeria, unidades, CTA
+      - About: hero, sobre, equipe
+
+    sections:
+      - HeroSection, ServicesSection, AboutSection
+      - TeamSection, FacilitiesSection, GallerySection
+      - UnitsSection, CTASection
+
+  # ── 5. BOT WHATSAPP (n8n) ──────────────────────────────────────────────────
+  - name: instituto-barros-bot-whatsapp
+    type: automation
+    description: >
+      Fluxo n8n de atendimento automatizado via WhatsApp. Integra com Evolution API
+      para recepção de mensagens, Redis para estado da conversa, e a API backend
+      para persistência de mensagens e conversas.
+    path: Bot/InstitutoBarrosAtendimento.json
+    platform: n8n (self-hosted, Docker)
+    node_count: ~145
+
+    external_integrations:
+      - name: Evolution API
+        type: WhatsApp Gateway
+        instance: InstitutoBarros
+        base_url: http://api:8080  # endereço interno Docker
+        auth_header: apikey
+      - name: Redis
+        use: estado da conversa (esteira de atendimento, respostas, sessão)
+      - name: Instituto Barros API
+        base_url: "{{ ApiBaseUrl }}"  # definido no nó Variáveis Config
+        auth: "Bearer {{ ApiServiceToken }}"  # token JWT de usuário de serviço
+
+    key_nodes:
+      - "Webhook: entrada de mensagens do Evolution API"
+      - "Tratamento dados: extrai phone, pushName, mensagem do webhook"
+      - "Variáveis Config: InstanciaWhatsapp, TokenWhatsapp, Identificador, MensagemTrocada, ApiBaseUrl, ApiServiceToken"
+      - "Ignora mensagens do próprio bot: filtra eco"
+      - "Verificação usuário em atendimento: consulta Redis"
+      - "Switch Estado Conversa: roteamento por estado (Redis)"
+      - "Decide esteira de atendimento: Reabilitação / Prevenção/Recovery / Agendamento / Nenhum Serviço"
+      - "Persistir Msg Recebida: POST /api/Whatsapp/ReceberMensagem (cliente→bot)"
+      - "No Operation* (x8 substituídos): POST /api/Whatsapp/ReceberMensagem (bot→cliente + fim de conversa)"
+
+    flow_paths:
+      - Reabilitação: pergunta dor → nível → fisio → faz sentido → agendamento
+      - Prevenção/Recovery: pergunta dor → nível → atividade → fortalecimento → análise → clínica
+      - Liberação: pergunta dor → atividade → tratamento → faz sentido
+      - Agendamento: unidade (Morumbi/Mooca/Paulista/Ipiranga) → coleta dados → confirmação
+      - Informações: dúvidas → convênio → reembolso → CTA agendamento
+      - Nenhum Serviço: contato especialista
+
+    variables_config:
+      InstanciaWhatsapp: InstitutoBarros
+      TokenWhatsapp: "<EVOLUTION_API_TOKEN>"  # valor real em vault/secret — não commitar aqui (SEC001)
+      ApiBaseUrl: http://api:8080
+      ApiServiceToken: "<JWT_SERVICE_TOKEN>"  # ← substituir por token real do usuário de serviço
+
+# ─────────────────────────────────────────────
+# INFRAESTRUTURA COMPARTILHADA
+# ─────────────────────────────────────────────
+shared_platform:
+
+  databases:
+    - provider: sqlserver
+      name: Instituto Barros DB
+      connection_key: DefaultConnection (appsettings.json)
+      orm: Entity Framework Core 8 (Code First, Migrations)
+      host: "(Azure SQL ou local)"
+
+    - provider: mongodb
+      name: leads
+      connection_key: MongoConnection (appsettings.json)
+      driver: MongoDB.Driver
+      use_case: Leads capturados pelo bot WhatsApp via n8n
+
+    - provider: redis
+      use_case: Estado da conversa do bot n8n (fila de atendimento, respostas salvas)
+      credential: "<REDIS_PASSWORD>"  # valor real em vault/secret — não commitar aqui (SEC001)
+
+  hosting:
+    - service: Azure Web App
+      app: instituto-barros-sistema
+      type: container (Docker)
+      image: tecnologiainstitutobarrros/sistema-instituto
+    - service: Vercel
+      apps: [sistema-instituto, instituto-barros-portal-cliente]
+    - service: n8n self-hosted
+      runtime: Docker (interno)
+
+  ci_cd:
+    - provider: GitHub Actions
+      trigger: push to main (Instituto_Barros_Sistema/)
+      steps: [build Docker image → push Docker Hub → deploy Azure Web App]
+
+  observability:
+    - logs: LogModel (banco SQL) + AuditLogService (registro de ações críticas)
+    - frontend_errors: console.error + react-hot-toast / react-toastify
+
+  authentication:
+    - ASP.NET Identity (gestão de usuários e roles)
+    - JWT Bearer (1h, HttpOnly cookie)
+    - CSRF Token (X-CSRF-Token header)
+
+  patterns:
+    architecture: DDD, Clean Architecture, Repository Pattern
+    backend:
+      framework: .NET 8.0
+      language: C#
+      orm: Entity Framework Core 8
+      validation: FluentValidation
+      mapping: AutoMapper
+      encryption: AES-256 CBC (DatabaseEncryptionHelper)
+    frontend_admin:
+      framework: React 18 + Vite
+      language: TypeScript
+      state: Zustand
+      styling: TailwindCSS v4
+    portal_cliente:
+      framework: Next.js 16
+      language: TypeScript
+      styling: TailwindCSS v3
+    site:
+      framework: React 19 + Vite
+      language: TypeScript
+      styling: TailwindCSS v3
+    automation:
+      platform: n8n
+      external_api: Evolution API (WhatsApp)
+
+# ─────────────────────────────────────────────
+# PENDÊNCIAS TÉCNICAS
+# ─────────────────────────────────────────────
+pending:
+  - id: P001
+    status: open
+    description: "Executar migration 'AddWhatsappModule' quando Docker subir"
+    command: >
+      dotnet ef migrations add AddWhatsappModule
+        --project src/Infrastructure/DomainDrivenDesign.Infrastructure.Data
+        --startup-project src/Presentation/DomainDriveDesign.Presentation.Api
+    priority: alta
+
+  - id: P002
+    status: open
+    description: "Substituir ApiServiceToken no nó 'Variáveis Config' do n8n por token JWT real de usuário de serviço"
+    file: Bot/InstitutoBarrosAtendimento.json
+    node_id: 34321788-508d-4df0-97eb-36c1392c53db
+    priority: alta
+
+  - id: P003
+    status: open
+    description: "Migrar WhatsappService.ts para padrão .refactored.ts usando BaseApiService"
+    file: Instituto_Barros_Front/.../src/services/WhatsappService.ts
+    priority: media
+
+  - id: P004
+    status: open
+    description: "CustomerAccessController está marcado como TEMPORÁRIO - avaliar evolução ou remoção"
+    priority: baixa
+
+  - id: P005
+    status: open
+    description: "Duplicação de services (.ts e .refactored.ts) - concluir migração e remover versões antigas"
+    priority: media
+
+  - id: P006
+    status: open
+    description: "Remover credenciais reais deste arquivo (SEC001) e substituir por placeholders antes de commitar em repositório"
+    priority: critica
+
+  - id: P007
+    status: open
+    description: "Adicionar [Authorize(Roles = Roles.Administrador)] nos 3 endpoints de role management do UserController (CS023)"
+    files:
+      - Presentation/.../Controllers/UserController.cs (GetFuncionarioAccess, RemoveRole, AddRole)
+    priority: alta
+
+  # ── VIOLAÇÕES ARQUITETURAIS (Code Review 2026-04-21) ───────────────────────
+
+  - id: AV001
+    severity: high
+    category: architecture_violation
+    description: >
+      Domain Services chamam SaveChangesAsync diretamente — viola o padrão onde
+      apenas a camada Application orquestra transações.
+    files:
+      - Domain/.../Services/CustomerDataService.cs (linhas 21, 51–52, 61, 67–68, 137–138)
+      - Domain/.../Services/OrderServiceDataService.cs (linhas 27–28, 53–54, 63–64, 75–76, 139–140)
+      - Domain/.../Services/FinancialTransactionDataService.cs (linhas 29, 38, 45, 82)
+      - Domain/.../Services/InstallmentDataService.cs (linhas 24, 31, 38, 73, 93)
+      - Domain/.../Services/NotificationDataService.cs (linhas 19, 27, 34, 55, 62, 82)
+      - Domain/.../Services/OrderServiceSessionDataService.cs (linhas 19, 26, 33)
+      - Domain/.../Services/LogDataService.cs (linhas 20, 27, 33)
+      - Domain/.../Services/ScheduleDataService.cs (linhas 25, 32, 38, 50)
+      - Domain/.../Services/BranchOfficeServiceDataService.cs (linhas 18, 27, 33, 57)
+      - Domain/.../Services/CategoryServiceDataService.cs (linhas 19, 28, 34, 54)
+      - Domain/.../Services/SubCategoryServiceDataService.cs (linhas 19, 27, 33, 53)
+      - Domain/.../Services/EmployeeServiceDataService.cs (linhas 19, 25, 32, 57)
+    fix: "Remover _repository.SaveChangesAsync() e _repository.DisposeCommitAsync() de todos os Domain Services. O Application Service correspondente já deve chamar SaveChangesAsync após delegar."
+    priority: alta
+
+  - id: AV002
+    severity: high
+    category: architecture_violation
+    description: >
+      Infrastructure referencia namespaces de Application — viola a ordem de dependências
+      Domain → Application → Infrastructure → Presentation.
+    files:
+      - Infrastructure/.../Context/InstitutoContext.cs (using DomainDrivenDesign.Application.Mapper)
+      - Infrastructure/.../Repositories/ScheduleDataRepository.cs (using DomainDrivenDesign.Application.RolesPermission)
+      - Infrastructure/.../Security/JwtSecurityExtension.cs (using DomainDrivenDesign.Application.Services e Interfaces)
+    fix: "Mover Roles para Domain ou projeto Shared. Extrair configuração JWT para módulo que não referencie Application diretamente."
+    priority: alta
+
+  - id: AV003
+    severity: high
+    category: architecture_violation
+    description: >
+      Domain Service implementa interface definida na camada Application.
+      ManagerUserDataService implementa IManagerUserDataService do namespace
+      DomainDrivenDesign.Application.Interfaces — inverte a dependência.
+    files:
+      - Domain/.../Services/ManagerUserDataService.cs (linha 1)
+    fix: "Mover IManagerUserDataService para DomainDrivenDesign.Domain.Interfaces.Services."
+    priority: alta
+
+  - id: AV004
+    severity: medium
+    category: architecture_violation
+    description: >
+      Duplo registro de IManagerUserService no IoC — JwtSecurityExtension.cs e
+      DomainDrivenDesignModule.cs ambos chamam AddScoped<IManagerUserService, ManagerUserService>().
+      O segundo sobrescreve silenciosamente o primeiro.
+    files:
+      - Infrastructure/.../Security/JwtSecurityExtension.cs (linha 21)
+      - Infrastructure/.../IoC/DomainDrivenDesignModule.cs (linha 62)
+    fix: "Remover o registro duplicado de JwtSecurityExtension.cs."
+    priority: media
+
+  - id: AV005
+    severity: high
+    category: architecture_violation
+    description: >
+      Entidades de domínio com setters públicos — qualquer camada pode alterar
+      o estado interno livremente. Viola encapsulamento DDD.
+    files:
+      - Domain/.../Entities/BaseModel.cs
+      - Domain/.../Entities/CustomerModel.cs
+      - Domain/.../Entities/ScheduleModel.cs
+      - Domain/.../Entities/OrderServiceModel.cs
+      - Domain/.../Entities/EmployeeModel.cs
+      - Domain/.../Entities/BranchOfficeModel.cs (e demais entidades)
+    fix: "Converter public set para private set (ou init) e adicionar métodos de domínio com intenção explícita (AtualizarNome, Ativar, Desativar, etc.)."
+    priority: alta
+
+  - id: AV006
+    severity: high
+    category: architecture_violation
+    description: >
+      IdentityInitializer usa sync-over-async (.Result e .Wait()) — risco de deadlock
+      sob carga em ambientes com SynchronizationContext.
+    files:
+      - Infrastructure/.../IdentityInitializerDependency/IdentityInitializer.cs
+    fix: "Tornar o método async Task e usar await em todas as chamadas de _roleManager e _userManager."
+    priority: alta
+
+  - id: AV007
+    severity: high
+    category: architecture_violation
+    description: >
+      Bug lógico: OrderServiceController.ChangeStatus passa new OrderServiceModel()
+      (entidade vazia) ao serviço em vez de buscar a entidade existente pelo id.
+    files:
+      - Presentation/.../Controllers/OrderServiceController.cs (linha 306)
+    fix: "Buscar a entidade existente pelo id antes de chamar ChangeStatus, ou refatorar a assinatura do método para receber apenas id e o novo status."
+    priority: alta
+
+  - id: AV008
+    severity: medium
+    category: architecture_violation
+    description: >
+      Endpoint RegisterUser é [AllowAnonymous] — qualquer usuário não autenticado
+      pode criar uma conta. Facilita abuse (criação em massa, bypass de validações).
+    files:
+      - Presentation/.../Controllers/UserController.cs (linha 85)
+    fix: "Proteger com [Authorize(Roles = Roles.Administrador)] ou exigir autenticação prévia."
+    priority: media
+
+  - id: AV009
+    severity: low
+    category: architecture_violation
+    description: >
+      JwtSecurityExtension.cs declara namespace incorreto
+      (DomainDrivenDesign.Infrastructure.Data.Repositories) mas o arquivo está em Security/.
+    files:
+      - Infrastructure/.../Security/JwtSecurityExtension.cs (linha 1)
+    fix: "Corrigir para DomainDrivenDesign.Infrastructure.Data.Security."
+    priority: baixa
+
+  - id: AV010
+    severity: medium
+    category: architecture_violation
+    description: >
+      SessionServiceController importa namespace de Domain diretamente —
+      Presentation deve depender apenas de interfaces de Application.
+    files:
+      - Presentation/.../Controllers/SessionServiceController.cs (linha 5)
+    fix: "Substituir interface de Domain por interface equivalente em Application, ou remover dependência."
+    priority: media
+
+  # ── CODE SMELLS (Code Review 2026-04-21) ────────────────────────────────────
+
+  - id: CS001
+    severity: critical
+    category: security
+    description: >
+      Senha padrão do cliente gerada a partir da data de nascimento (ddMMyyyy) —
+      completamente previsível. Atacante com CPF + data de nascimento pode logar imediatamente.
+    files:
+      - Application/.../Services/CustomerAccessService.cs (linha 308)
+    fix: "Gerar senha aleatória com RandomNumberGenerator e enviar por canal seguro. Nunca derivar de dado pessoal público."
+    priority: critica
+
+  - id: CS002
+    severity: critical
+    category: security
+    description: >
+      Chave de criptografia AES-256 padrão hard-coded no código-fonte
+      ('ThisIsADefaultKeyThatMustBeChangedInProduction1234567890123456').
+      Se a env var não estiver configurada, todos os dados cifrados usam esta chave pública.
+    files:
+      - Application/.../Helpers/DatabaseEncryptionHelper.cs (linha 31)
+    fix: "Substituir o fallback por InvalidOperationException (fail-fast). Nunca ter chave criptográfica no código-fonte."
+    priority: critica
+
+  - id: CS003
+    severity: high
+    category: code_smell
+    description: >
+      Dicionário estático em memória para tokens de recuperação de senha —
+      não é thread-safe (race condition), não persiste entre restarts da aplicação.
+      O próprio código contém comentário 'in production, use distributed cache or database'.
+    files:
+      - Application/.../Services/SecurePasswordRecoveryService.cs (linha 25)
+    fix: "Substituir por IDistributedCache (Redis) com TTL, ou ao menos ConcurrentDictionary + IMemoryCache para thread-safety imediata."
+    priority: alta
+
+  - id: CS004
+    severity: high
+    category: code_smell
+    description: >
+      Método SimularEnvioNotificacao com resultado aleatório (new Random().Next(0,2))
+      presente em código de produção — pode ser chamado acidentalmente.
+    files:
+      - Application/.../Services/NotificationService.cs (linha 87)
+    fix: "Remover o método ou movê-lo para projeto de testes."
+    priority: alta
+
+  - id: CS005
+    severity: high
+    category: code_smell
+    description: >
+      Fire-and-forget sem CancellationToken: CleanupExpiredSessionsAsync executa
+      while(true) sem suporte a parada graciosa. Exceção não capturada encerra
+      o loop silenciosamente.
+    files:
+      - Application/.../Services/SessionManagementService.cs (linha 32)
+    fix: "Converter para IHostedService ou BackgroundService com CancellationToken injetado."
+    priority: alta
+
+  - id: CS006
+    severity: high
+    category: code_smell
+    description: >
+      God class ManagerUserService (588 linhas) — gerencia criação de usuários,
+      login, geração de JWT, roles, reset de senha por CPF e validação de clientes.
+    files:
+      - Application/.../Services/ManagerUserService.cs
+    fix: "Extrair em: AuthenticationService (login/JWT), UserRegistrationService (criação), PasswordRecoveryService (reset), RoleManagementService (roles)."
+    priority: alta
+
+  - id: CS007
+    severity: high
+    category: code_smell
+    description: >
+      Exceções capturadas e descartadas sem logging em múltiplos controllers —
+      impossível diagnosticar erros em produção.
+    files:
+      - Presentation/.../Controllers/BranchOfficeController.cs (linha 175)
+      - Presentation/.../Controllers/EmployeeController.cs (linha 181)
+      - Presentation/.../Controllers/SubCategoryController.cs (linha 160)
+      - Presentation/.../Controllers/CustomerController.cs (linhas 272, 297)
+      - Presentation/.../Controllers/ClienteController.cs (linhas 355, 583)
+    fix: "Injetar ILogger<T> e adicionar _logger.LogError(ex, 'contexto') em cada catch, ou remover try/catch local e deixar GlobalExceptionFilter tratar."
+    priority: alta
+
+  - id: CS008
+    severity: medium
+    category: code_smell
+    description: >
+      Controle de fluxo baseado em comparação de string de mensagem de exceção —
+      frágil e quebra silenciosamente em refatorações.
+    files:
+      - Presentation/.../Controllers/CategoryServiceController.cs (linha 167)
+    fix: "Criar exceção de domínio EntityNotFoundException e capturá-la em bloco catch separado."
+    priority: media
+
+  - id: CS009
+    severity: medium
+    category: code_smell
+    description: >
+      Números mágicos (magic numbers) sem nome simbólico espalhados pelo código.
+    occurrences:
+      - "OrderServiceDataRepository.cs:46 — == 6 (status 'Concluída')"
+      - "ClienteController.cs:580 — TipoNotificacao = 3 (cancelamento)"
+      - "OrderServiceSessionService.cs:158 — TipoNotificacao = 1 (check-in realizado)"
+      - "OrderServiceSessionService.cs:308 — TipoNotificacao = 2 (check-in excluído)"
+      - "DomainDrivenDesignModule.cs:193 — 'leads' (nome MongoDB)"
+      - "DashboardService.cs:449 — '1','2' (tipos transação saída/entrada)"
+    fix: "Usar as enumerações tipadas já existentes (EOrderServiceStatus, ENotificationType, etc.) de forma consistente. Criar constantes nomeadas onde não houver enum."
+    priority: media
+
+  - id: CS010
+    severity: medium
+    category: code_smell
+    description: >
+      Verificação if (id == null) em parâmetro do tipo Guid (struct) —
+      condição é sempre false, validação nunca é executada.
+    files:
+      - Presentation/.../Controllers/CustomerController.cs (linhas 157, 191, 243)
+    fix: "Substituir por if (id == Guid.Empty) ou usar Guid? se o parâmetro for opcional."
+    priority: media
+
+  - id: CS011
+    severity: medium
+    category: code_smell
+    description: >
+      Métodos async Task sem nenhum await — warnings do compilador e overhead desnecessário.
+    files:
+      - Infrastructure/.../Repositories/RepositoryBase.cs (método Update)
+      - Infrastructure/.../Repositories/OrderServiceDataRepository.cs (método ChangeStatus)
+      - Application/.../Services/SessionManagementService.cs (vários — return await Task.FromResult)
+      - Application/.../Services/SecurePasswordRecoveryService.cs (GetSecurityQuestionsAsync)
+    fix: "Remover modificador async dos métodos que não usam await. Retornar Task.CompletedTask ou Task.FromResult diretamente."
+    priority: media
+
+  - id: CS012
+    severity: medium
+    category: code_smell
+    description: >
+      RepositoryBase.Desabled() usa DateTime.Now (horário local do servidor, difere
+      entre instâncias, não testável/mockável).
+    files:
+      - Infrastructure/.../Repositories/RepositoryBase.cs (linha 69)
+    fix: "Usar DateTime.UtcNow de forma consistente, ou injetar IDateTimeProvider para testabilidade."
+    priority: media
+
+  - id: CS013
+    severity: low
+    category: code_smell
+    description: >
+      Nomenclatura inconsistente e typos propagados por toda a base de código.
+    occurrences:
+      - "RepositoryBase.cs — campo _sampleContext (deveria ser _dbContext ou _context)"
+      - "CustomerDataRepository.cs — define novo campo 'protected new InstitutoContext _context' duplicando _sampleContext herdado"
+      - "EmployeeValidador.cs — typo 'Validador' (deveria ser Validator)"
+      - "Método Desabled() em toda a base (deveria ser Disabled)"
+      - "EmployeeServiceDataService.cs:45 — parâmetro nomeado 'email' em método GetBranchOfficeExistByTitleAsync"
+    fix: "Renomear via busca/substituição global; eliminar campo duplicado em CustomerDataRepository."
+    priority: baixa
+
+  - id: CS014
+    severity: medium
+    category: code_smell
+    description: >
+      Métodos que sempre lançam NotImplementedException em código de produção — código morto.
+    files:
+      - Domain/.../Services/BranchOfficeServiceDataService.cs:50 (GetBranchOfficeExistByTitleAsync)
+      - Domain/.../Services/CategoryServiceDataService.cs:46 (GetCategoryExistByTitleAsync)
+      - Domain/.../Services/SubCategoryServiceDataService.cs:45 (GetSubCategoryExistByTitleAsync)
+      - Domain/.../Services/EmployeeServiceDataService.cs:49 (GetEmployeeExistByNameAsync)
+    fix: "Remover os métodos das interfaces e implementações, ou implementá-los se necessários."
+    priority: media
+
+  - id: CS015
+    severity: low
+    category: code_smell
+    description: >
+      URLs de origens confiáveis hard-coded em AntiForgeryMiddleware —
+      dificulta deploy em múltiplos ambientes sem recompilar.
+    files:
+      - Presentation/.../Middleware/AntiForgeryMiddleware.cs (linha 16)
+    fix: "Mover para appsettings.json (Cors:AllowedOrigins) e injetar via IConfiguration."
+    priority: baixa
+
+  - id: CS016
+    severity: low
+    category: code_smell
+    description: >
+      Mappers de EF com prefixo 'I' sugerindo interface — são classes concretas
+      que implementam IEntityTypeConfiguration<T>.
+    files:
+      - Application/.../Mapper/IFinancialTransactionDataMapper.cs
+      - Application/.../Mapper/IInstallmentDataMapper.cs
+    fix: "Renomear para FinancialTransactionDataMapper e InstallmentDataMapper."
+    priority: baixa
+
+  - id: CS017
+    severity: low
+    category: code_smell
+    description: >
+      Expressões ternárias aninhadas ilegíveis em mapeamento de filtros.
+    files:
+      - Domain/.../Services/CategoryServiceDataService.cs (linha 41)
+      - Domain/.../Services/SubCategoryServiceDataService.cs (linha 41)
+    fix: "Substituir por operador null-coalescing (??) e pattern matching (is not null)."
+    priority: baixa
+
+  - id: CS018
+    severity: low
+    category: code_smell
+    description: >
+      Uso de new Guid() no lugar de Guid.Empty — semanticamente confuso.
+    files:
+      - Domain/.../Services/ScheduleDataService.cs (linha 76)
+    fix: "Substituir por Guid.Empty."
+    priority: baixa
+
+  - id: CS019
+    severity: medium
+    category: code_smell
+    description: >
+      Código marcado como TEMPORÁRIO/TODO há longo prazo sem data de remoção prevista —
+      8 comentários de aviso no CustomerAccessService e CustomerAccessController.
+    files:
+      - Application/.../Services/CustomerAccessService.cs
+      - Presentation/.../Controllers/CustomerAccessController.cs
+    fix: "Criar ticket rastreável com data-limite. Idealmente remover antes do próximo release."
+    priority: media
+
+  - id: CS020
+    severity: low
+    category: code_smell
+    description: >
+      LogsController define DataCadastro = DateTime.Now diretamente no controller —
+      responsabilidade que deveria estar no Domain Service ou mapper.
+    files:
+      - Presentation/.../Controllers/LogsController.cs (linha 193)
+    fix: "Mover atribuição de DataCadastro para LogDataService.Create."
+    priority: baixa
+
+  - id: CS021
+    severity: medium
+    category: code_smell
+    description: >
+      Métodos excessivamente longos (>100 linhas) dificultando leitura e teste.
+    occurrences:
+      - "ClienteController.cs — CancelarConsulta (~140 linhas)"
+      - "OrderServiceSessionService.cs — CreateAsyncWithNotification (~150 linhas)"
+      - "OrderServiceSessionService.cs — DeleteAsyncWithNotification (~130 linhas)"
+      - "ManagerUserService.cs — ValidationCredentialsCliente (~90 linhas)"
+      - "Program.cs — configuração de rate limiter inline (~130 linhas)"
+    fix: "Extrair lógica de notificação em NotificationOrchestrationService; mover configuração de rate limiter para método de extensão; extrair validação de credenciais em CredentialValidator."
+    priority: media
+
+  - id: CS022
+    severity: medium
+    category: security
+    description: >
+      ScheduleParticipantController.DisableAsync aceita userDesabled como parâmetro HTTP —
+      permite que o chamador impersone outro usuário como responsável pela desativação.
+    files:
+      - Presentation/.../Controllers/ScheduleParticipantController.cs (linha 79)
+    fix: "Remover userDesabled do parâmetro e obtê-lo de UserId (MainController), como os demais controllers fazem."
+    priority: media
+
+  # ── NOVOS APONTAMENTOS (2026-07-03) ──────────────────────────────────────────
+
+  - id: CS023
+    severity: high
+    category: security
+    status: open
+    description: >
+      Endpoints de gerenciamento de roles (GET /FuncionarioAccess, DELETE/{userId}/Role/{role},
+      POST/{userId}/Role/{role}) protegidos apenas por [Authorize] genérico — qualquer usuário
+      autenticado (Fisioterapeuta, Comercial, etc.) pode remover ou adicionar roles a qualquer
+      outro usuário, incluindo promover a Administrador.
+    files:
+      - Presentation/.../Controllers/UserController.cs (GetFuncionarioAccess, RemoveRole, AddRole)
+    fix: "Adicionar [Authorize(Roles = Roles.Administrador)] em cada endpoint de role management."
+    priority: alta
+
+  - id: CS024
+    severity: high
+    category: security
+    status: fixed
+    fixed_in: "branch checkin-48h-timezone / main (2026-07-03)"
+    description: >
+      Forbid(string) em 4 controllers interpretava o argumento como nome de esquema de
+      autenticação, não como mensagem — lançava exceção 'No authentication handler registered
+      for scheme X' em produção, expondo stack trace e quebrando o fluxo de autenticação.
+    files:
+      - Presentation/.../Controllers/UserController.cs (2x Forbid)
+      - Presentation/.../Controllers/ClienteController.cs (2x Forbid)
+      - Presentation/.../Controllers/OrderServiceController.cs (1x Forbid)
+      - Presentation/.../Controllers/ScheduleController.cs (3x Forbid)
+    fix: "Substituído por Unauthorized(new { error = '...' }) ou StatusCode(403, new { error = '...' }) conforme o contexto."
+    priority: alta
+
+  - id: CS025
+    severity: high
+    category: business_rule
+    status: fixed
+    fixed_in: "branch checkin-48h-timezone / main (2026-07-03)"
+    description: >
+      Regra das 48h para check-in usava DateTime.Now que em Azure (UTC+0) retorna UTC,
+      não horário de Brasília (UTC-3). Resultado: check-ins bloqueados 3h antes do prazo
+      real, impedindo fisioterapeutas de registrar dentro do prazo correto.
+    files:
+      - Application/.../Services/OrderServiceSessionService.cs
+    fix: >
+      Adicionado método Agora() que usa TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz)
+      com ID de timezone condicional: 'E. South America Standard Time' (Windows) /
+      'America/Sao_Paulo' (Linux/Azure). Sempre usar Agora() para lógica de negócio temporal.
+    pattern: "Para qualquer regra de negócio com horário Brasil: usar Agora() ou equivalente, nunca DateTime.Now direto."
+    priority: alta
+
+  - id: CS026
+    severity: medium
+    category: business_rule
+    status: fixed
+    fixed_in: "branch feature/employee-user-access-management / master (2026-07-03)"
+    description: >
+      Botão de check-in no Calendar.tsx usava condição '&& !userHasRole(COORDENADOR_FISIOTERAPEUTA)'
+      para determinar se devia aplicar a regra das 48h — excluindo CoordenadorFisioterapeuta
+      da restrição. Coordenador conseguia clicar check-in após 48h; backend rejeitava com 409.
+    files:
+      - Instituto_Barros_Front/.../src/pages/Calendar.tsx
+    fix: "Condição alterada para '||' — ambos os perfis (Fisioterapeuta e CoordenadorFisioterapeuta) seguem a regra."
+    priority: media
+
+  - id: CS027
+    severity: high
+    category: performance
+    status: fixed
+    fixed_in: "branch perf/ordem-servico-customer-summary / master (2026-07-03)"
+    description: >
+      Tela /ordem-servico chamava GET /api/Customer/GetAll (payload completo com histórico,
+      serviços e sessões de todos os pacientes) apenas para preencher um dropdown de seleção.
+      Em produção com volume real de dados causava timeout >30s e cancelamento pelo cliente.
+    fix: "Substituído por GET /api/Customer/GetAllSummary (somente id, nome, telefone). GetAll mantido para telas que precisam do payload completo."
+    priority: alta
+
+  - id: CS028
+    severity: high
+    category: performance
+    status: fixed
+    fixed_in: "branch feature/employee-user-access-management / main (2026-07-03)"
+    description: >
+      CustomerDataRepository.GetAll usava um único DbContext por tipo de relacionamento
+      (ctxHistorico, ctxServicos) e disparava múltiplas queries simultâneas sobre ele via
+      Task.WhenAll — violação direta da regra 'DbContext não é thread-safe'. Resultado:
+      'A second operation was started on this context instance' em produção.
+    files:
+      - Infrastructure/.../Repositories/CustomerDataRepository.cs
+    fix: >
+      Cada chunk do Chunk(2000) cria seu próprio scope via IServiceScopeFactory e obtém
+      uma instância independente de InstitutoContext. Nunca compartilhar DbContext entre
+      tasks paralelas.
+    pattern: "Para Task.WhenAll com EF Core: sempre um scope/DbContext por task, nunca compartilhar."
+    priority: alta
+
+  # ── CREDENCIAIS EXPOSTAS NO REGISTRY ─────────────────────────────────────────
+
+  - id: SEC001
+    severity: critical
+    category: security
+    status: open
+    description: >
+      Este arquivo (architecture-registry.yaml) contém credenciais reais em texto claro:
+      - shared_platform.databases.redis.credential: senha Redis do n8n
+      - services[bot].variables_config.TokenWhatsapp: token da Evolution API
+      Qualquer acesso ao repositório onde este arquivo for commitado expõe estas credenciais.
+    affected_values:
+      - "redis credential: xqvQlycVWIScu8gU (linha ~707)"
+      - "TokenWhatsapp: EDD17B1B6B1A-4204-9BB9-40BFEE8F8C44 (linha ~683)"
+    fix: >
+      1. Substituir os valores por placeholders: '<REDIS_PASSWORD>' e '<EVOLUTION_API_TOKEN>'.
+      2. Armazenar os valores reais em vault (Azure Key Vault, GitHub Secrets ou .env local não commitado).
+      3. Revogar e regenerar os tokens expostos (assumir comprometidos).
+      4. Garantir que o repositório de arquitectura seja PRIVADO.
+    priority: critica
+
+  # ── MELHORIAS DE PADRÃO ESTABELECIDAS NESTA SESSÃO ───────────────────────────
+
+patterns_established:
+  - id: PAT001
+    title: "Endpoint leve para selects/dropdowns"
+    rule: >
+      Nunca usar GetAll (payload completo) para preencher selects ou dropdowns no frontend.
+      Sempre criar ou usar endpoint Summary (id + label + campos mínimos).
+    example: "CustomerController.GetAllSummary → FormOrderService dropdown de clientes"
+
+  - id: PAT002
+    title: "Task.WhenAll com EF Core — um scope por task"
+    rule: >
+      DbContext não é thread-safe. Para Task.WhenAll com múltiplas queries paralelas,
+      cada task deve criar seu próprio IServiceScope e obter uma instância independente.
+      NUNCA compartilhar uma única instância de DbContext entre tasks.
+    example: "CustomerDataRepository.GetAll — historicosTask e servicosTask criam scope por chunk"
+
+  - id: PAT003
+    title: "Horário de negócio sempre UTC→Brasil"
+    rule: >
+      Em produção (Azure) DateTime.Now retorna UTC+0. Para qualquer regra de negócio
+      com base em horário brasileiro, usar:
+        var tz = TimeZoneInfo.FindSystemTimeZoneById(
+            OperatingSystem.IsWindows() ? "E. South America Standard Time" : "America/Sao_Paulo");
+        return TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz);
+    example: "OrderServiceSessionService.Agora() — regra das 48h para check-in"
+
+  - id: PAT004
+    title: "Retorno de erro HTTP — nunca Forbid(string)"
+    rule: >
+      Forbid(string) em ASP.NET Core interpreta o argumento como nome de esquema de
+      autenticação, não como mensagem. Usar:
+        - Unauthorized(new { error = '...' }) para credenciais inválidas (401)
+        - StatusCode(403, new { error = '...' }) para acesso negado (403)
+    example: "UserController.LoginUser → Unauthorized(new { error = 'Credenciais inválidas.' })"
