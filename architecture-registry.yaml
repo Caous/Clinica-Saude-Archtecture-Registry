@@ -132,6 +132,8 @@ services:
             - ILogDataRepository
             - IWhatsappNumberDataRepository
             - IWhatsappConversationDataRepository
+            - IInsightQueryRepository          # bounded context Insights
+            - IInsightFollowUpRepository       # bounded context Insights
           services:
             - IManagerUserDataService
             - ICustomerDataService
@@ -151,6 +153,7 @@ services:
             - ILogDataService
             - IWhatsappNumberDataService
             - IWhatsappConversationDataService
+            - IClockBrasil                     # bounded context Insights (PAT003)
 
       infrastructure:
         path: src/Infrastructure/
@@ -196,6 +199,7 @@ services:
           - CustomerAccessService (ICustomerAccessService) — TEMPORÁRIO
           - WhatsappNumberService (IWhatsappNumberService)
           - WhatsappConversationService (IWhatsappConversationService)
+        - InsightService (IInsightService) — bounded context Insights de Venda
         helpers:
           - DatabaseEncryptionHelper: AES-256 CBC. Métodos: EncryptField(string?), DecryptField(string?). Registrado como Singleton.
           - EmailHelper
@@ -360,6 +364,24 @@ services:
           - "GET   /GetMensagens/{id}     | Lista mensagens de uma conversa"
           - "PATCH /MarcarComoLida/{id}   | Zera contador MensagensNaoLidas de uma conversa"
 
+      - controller: InsightsController
+        route: /api/Insights
+        roles: [Administrador, Comercial, Administrativo, CoordenadorFisioterapeuta, Financeiro]
+        rate_limit: "30 req/30s"
+        description: >
+          Insights de venda. Bounded context proprio (ver PAT005): contexto EF, read models
+          e repositorios separados — nao usa CustomerController.GetAll nem
+          TransactionsController.GetAll, ambos ja sobrecarregados.
+        endpoints:
+          - "GET  /{chave}/contador                     | Total do card. Resolve em COUNT."
+          - "GET  /{chave}/itens                        | Pagina de itens (server-side). 204 se vazio."
+          - "GET  /{chave}/exportacao                   | Conjunto completo p/ CSV/XLSX. Teto de 5000 linhas."
+          - "POST /{chave}/acompanhamento               | Contatado / Adiado / Descartado. Tira o item da fila."
+          - "GET  /{chave}/acompanhamento/{referenciaId}| Historico de tratamento do item"
+          - "GET  /chaves                               | Chaves disponiveis, para o registry do front"
+        chaves_onda_1: [PlanoAcabando, PacienteDormente, AniversariantesHoje, ParcelasVencidas]
+        chaves_backlog: [PlanoZeradoSemRenovar, FaltouOntem, SessaoAmanhaNaoConfirmada, ParcelasVence7Dias, PlanoSemPagamento]
+
       - controller: WhatsappNumberController
         route: /api/WhatsappNumber
         roles:
@@ -400,6 +422,8 @@ services:
           limit: 10 req / 30s
         - endpoint: Dashboard
           limit: 20 req / 30s
+        - endpoint: Insights
+          limit: 30 req / 30s  # a faixa dispara um contador por card
         - endpoint: BranchOffice, Employee, Cliente, SessionService, OrderService
           limit: sem limite
         - endpoint: demais
@@ -418,6 +442,7 @@ services:
           - BranchOfficeService, Employee
           - Notifications, NotificationUserViews
           - TransacoesFinanceiras, Parcelas
+          - InsightAcompanhamento  # bounded context Insights; contexto e historico de migration proprios
           - Logs
           - WhatsappNumbers, WhatsappConversations, WhatsappMessages  # pendente migration AddWhatsappModule
 
@@ -501,6 +526,7 @@ services:
         - /basic-tables           → WhatsApp Atendimentos      [Adm, Adm, Comercial]
         - /whatsapp/config        → WhatsappConfigPage         [Adm apenas]
         - /financeiro/despesas    → Despesas                   [Adm, Financeiro]
+        - /insights/:chave        → InsightDetalhe              [Adm, Comercial, Administrativo, CoordenadorFisio]
         - /notificacoes/enviar    → Notifications              [Adm apenas]
         - /notificacoes/historico → Historico                  [todos]
         - /logs                   → Log                        [Adm apenas]
@@ -573,6 +599,8 @@ services:
       DASHBOARD_LEAD:        [Adm, Adm, Comercial, Func]
       FINANCEIRO:            [Adm, Financeiro]
       FINANCEIRO_DESPESAS:   [Adm, Financeiro]
+      INSIGHTS_VENDAS:       [Adm, Comercial, Administrativo, CoordenadorFisio]
+      INSIGHTS_FINANCEIRO:   [Adm, Financeiro, Comercial]
       NOTIFICACOES:          [todos exceto Cliente]
       NOTIFICACOES_ENVIAR:   [Adm apenas]
       LOGS:                  [Adm apenas]
@@ -1006,6 +1034,36 @@ patterns_established:
             OperatingSystem.IsWindows() ? "E. South America Standard Time" : "America/Sao_Paulo");
         return TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz);
     example: "OrderServiceSessionService.Agora() — regra das 48h para check-in"
+
+  - id: PAT005
+    title: "Bounded context de leitura com contexto EF proprio"
+    rule: >
+      Modulo de leitura pesada (insight, relatorio, BI) nao estende os filtros de um
+      endpoint de CRUD ja existente. Cria contexto EF proprio com:
+        1. QueryTrackingBehavior.NoTracking global;
+        2. read models que projetam SO as colunas necessarias das tabelas de outro contexto,
+           mapeadas com ToTable(nome, t => t.ExcludeFromMigrations());
+        3. MigrationsHistoryTable dedicada — sem isso os dois contextos disputam
+           __EFMigrationsHistory e o EF tenta dropar o schema do outro;
+        4. indices de apoio nas tabelas alheias por migrationBuilder.Sql com IF NOT EXISTS,
+           ja que o BC nao e dono daquele schema.
+      Contador e listagem precisam sair da MESMA IQueryable, diferindo so no terminal
+      (CountAsync ou Skip/Take): duas definicoes da regra divergem com o tempo.
+      Validar sempre com 'dotnet ef migrations script --context <BC>' antes de aplicar —
+      o script nao pode conter DROP ou ALTER de tabela de outro contexto.
+    example: "InsightsReadContext + InsightQueryRepository.Consultar (api/Insights)"
+
+  - id: PAT006
+    title: "Predicado de consulta EF: inline, nunca em metodo auxiliar"
+    rule: >
+      Condicao dentro de expression tree precisa ser escrita inline. Extrair para metodo
+      auxiliar mantem os testes LINQ-to-objects e InMemory verdes, mas o EF Core nao traduz
+      chamada de metodo e a consulta so quebra em producao. O mesmo vale para
+      EF.Functions.DateDiffDay, que derruba a consulta para avaliacao no cliente: projete a
+      data crua e faca a aritmetica na camada de Application.
+      Cobrir com teste que gera o SQL via ToQueryString() — compila a consulta sem abrir
+      conexao, de forma deterministica.
+    example: "InsightSpecifications + InsightTraducaoSqlTests"
 
   - id: PAT004
     title: "Retorno de erro HTTP — nunca Forbid(string)"
