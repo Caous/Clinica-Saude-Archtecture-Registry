@@ -1026,14 +1026,26 @@ patterns_established:
     example: "CustomerDataRepository.GetAll — historicosTask e servicosTask criam scope por chunk"
 
   - id: PAT003
-    title: "Horário de negócio sempre UTC→Brasil"
+    title: "Horário de negócio sempre UTC→Brasil, com offset fixo"
     rule: >
       Em produção (Azure) DateTime.Now retorna UTC+0. Para qualquer regra de negócio
-      com base em horário brasileiro, usar:
-        var tz = TimeZoneInfo.FindSystemTimeZoneById(
-            OperatingSystem.IsWindows() ? "E. South America Standard Time" : "America/Sao_Paulo");
-        return TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz);
-    example: "OrderServiceSessionService.Agora() — regra das 48h para check-in"
+      com base em horário brasileiro, usar offset fixo de -3h:
+        return DateTime.SpecifyKind(DateTime.UtcNow.AddHours(-3), DateTimeKind.Unspecified);
+      NÃO usar TimeZoneInfo.FindSystemTimeZoneById("America/Sao_Paulo"): a API roda em
+      container aspnet:8.0-alpine, que instala apenas icu-libs e não inclui tzdata.
+      Sem a base de fusos IANA a busca lança TimeZoneNotFoundException — funciona na
+      máquina do desenvolvedor e devolve 500 em produção.
+      Brasília é UTC-3 de forma permanente desde que o Brasil aboliu o horário de verão
+      em 2019, então o offset fixo não tem ambiguidade.
+      Kind=Unspecified acompanha a semântica do banco, que grava data sem fuso.
+    example: >
+      OrderServiceSessionService.Agora() (regra das 48h de check-in),
+      FinancialTransactionService.DataPlanoPadrao() e
+      SalesInsights/Helpers/ClockBrasil.cs
+    historico: >
+      A versão anterior desta regra prescrevia FindSystemTimeZoneById e foi seguida ao
+      implementar o módulo de Insights, reintroduzindo o defeito que já havia sido
+      corrigido duas vezes no código. Corrigida em 2026-09-18.
 
   - id: PAT005
     title: "Bounded context de leitura com contexto EF proprio"
