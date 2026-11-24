@@ -1,0 +1,280 @@
+{
+  "_comentario": "Paleta Cuidaflux v2 (2026-11-24): tema claro verde-azulado, tema escuro azul suave. Pares validados por check-marca --contraste. No claro, texto-suave nao deve ser usado sobre superficie-alt (4.30:1). Pontos do logo (decorativos, nao usar em texto): #E8607A (claro) e #F6AFBE (escuro).",
+  "cores": {
+    "primaria-claro": "#0F766E",
+    "primaria-forte-claro": "#0B5750",
+    "primaria-suave-claro": "#D9F0EC",
+    "sobre-primaria-claro": "#FFFFFF",
+    "secundaria-claro": "#BE3455",
+    "secundaria-suave-claro": "#FCE4E9",
+    "sobre-secundaria-claro": "#FFFFFF",
+    "fundo-claro": "#FBF8F3",
+    "superficie-claro": "#FFFFFF",
+    "superficie-alt-claro": "#F1ECE4",
+    "texto-claro": "#12312F",
+    "texto-secundario-claro": "#4A5957",
+    "texto-suave-claro": "#66716F",
+    "sucesso-claro": "#1B7A43",
+    "sucesso-suave-claro": "#DDF3E4",
+    "alerta-claro": "#8A5A00",
+    "alerta-suave-claro": "#FBEBC8",
+    "erro-claro": "#B3261E",
+    "erro-suave-claro": "#FBE0DD",
+    "info-claro": "#1F5FA6",
+    "info-suave-claro": "#DCEAF8",
+    "primaria-escuro": "#9CC7EE",
+    "primaria-forte-escuro": "#C2DDF5",
+    "primaria-suave-escuro": "#2F4D6C",
+    "sobre-primaria-escuro": "#10263B",
+    "secundaria-escuro": "#F6AFBE",
+    "secundaria-suave-escuro": "#4E3547",
+    "sobre-secundaria-escuro": "#4A1526",
+    "fundo-escuro": "#203246",
+    "superficie-escuro": "#293E55",
+    "superficie-alt-escuro": "#324A63",
+    "texto-escuro": "#F1F4F8",
+    "texto-secundario-escuro": "#C5D0DB",
+    "texto-suave-escuro": "#ADBBC9",
+    "sucesso-escuro": "#8FDCAF",
+    "sucesso-suave-escuro": "#24483F",
+    "alerta-escuro": "#F2CD86",
+    "alerta-suave-escuro": "#4A4130",
+    "erro-escuro": "#FFAAA1",
+    "erro-suave-escuro": "#54343C",
+    "info-escuro": "#A3D2F8",
+    "info-suave-escuro": "#2A4C70",
+    "branco": "#FFFFFF"
+  },
+  "pares": [
+    {
+      "tema": "claro",
+      "texto": "sobre-primaria-claro",
+      "fundo": "primaria-claro"
+    },
+    {
+      "tema": "claro",
+      "texto": "sobre-secundaria-claro",
+      "fundo": "secundaria-claro"
+    },
+    {
+      "tema": "claro",
+      "texto": "primaria-claro",
+      "fundo": "fundo-claro"
+    },
+    {
+      "tema": "claro",
+      "texto": "secundaria-claro",
+      "fundo": "fundo-claro"
+    },
+    {
+      "tema": "claro",
+      "texto": "texto-claro",
+      "fundo": "fundo-claro"
+    },
+    {
+      "tema": "claro",
+      "texto": "texto-suave-claro",
+      "fundo": "fundo-claro"
+    },
+    {
+      "tema": "claro",
+      "texto": "texto-secundario-claro",
+      "fundo": "fundo-claro"
+    },
+    {
+      "tema": "claro",
+      "texto": "primaria-claro",
+      "fundo": "superficie-claro"
+    },
+    {
+      "tema": "claro",
+      "texto": "secundaria-claro",
+      "fundo": "superficie-claro"
+    },
+    {
+      "tema": "claro",
+      "texto": "texto-claro",
+      "fundo": "superficie-claro"
+    },
+    {
+      "tema": "claro",
+      "texto": "texto-suave-claro",
+      "fundo": "superficie-claro"
+    },
+    {
+      "tema": "claro",
+      "texto": "texto-secundario-claro",
+      "fundo": "superficie-claro"
+    },
+    {
+      "tema": "claro",
+      "texto": "texto-claro",
+      "fundo": "superficie-alt-claro"
+    },
+    {
+      "tema": "claro",
+      "texto": "primaria-forte-claro",
+      "fundo": "primaria-suave-claro"
+    },
+    {
+      "tema": "claro",
+      "texto": "sucesso-claro",
+      "fundo": "fundo-claro"
+    },
+    {
+      "tema": "claro",
+      "texto": "sucesso-claro",
+      "fundo": "sucesso-suave-claro"
+    },
+    {
+      "tema": "claro",
+      "texto": "alerta-claro",
+      "fundo": "fundo-claro"
+    },
+    {
+      "tema": "claro",
+      "texto": "alerta-claro",
+      "fundo": "alerta-suave-claro"
+    },
+    {
+      "tema": "claro",
+      "texto": "erro-claro",
+      "fundo": "fundo-claro"
+    },
+    {
+      "tema": "claro",
+      "texto": "erro-claro",
+      "fundo": "erro-suave-claro"
+    },
+    {
+      "tema": "claro",
+      "texto": "info-claro",
+      "fundo": "fundo-claro"
+    },
+    {
+      "tema": "claro",
+      "texto": "info-claro",
+      "fundo": "info-suave-claro"
+    },
+    {
+      "tema": "escuro",
+      "texto": "sobre-primaria-escuro",
+      "fundo": "primaria-escuro"
+    },
+    {
+      "tema": "escuro",
+      "texto": "sobre-secundaria-escuro",
+      "fundo": "secundaria-escuro"
+    },
+    {
+      "tema": "escuro",
+      "texto": "primaria-escuro",
+      "fundo": "fundo-escuro"
+    },
+    {
+      "tema": "escuro",
+      "texto": "secundaria-escuro",
+      "fundo": "fundo-escuro"
+    },
+    {
+      "tema": "escuro",
+      "texto": "texto-escuro",
+      "fundo": "fundo-escuro"
+    },
+    {
+      "tema": "escuro",
+      "texto": "texto-suave-escuro",
+      "fundo": "fundo-escuro"
+    },
+    {
+      "tema": "escuro",
+      "texto": "texto-secundario-escuro",
+      "fundo": "fundo-escuro"
+    },
+    {
+      "tema": "escuro",
+      "texto": "primaria-escuro",
+      "fundo": "superficie-escuro"
+    },
+    {
+      "tema": "escuro",
+      "texto": "secundaria-escuro",
+      "fundo": "superficie-escuro"
+    },
+    {
+      "tema": "escuro",
+      "texto": "texto-escuro",
+      "fundo": "superficie-escuro"
+    },
+    {
+      "tema": "escuro",
+      "texto": "texto-suave-escuro",
+      "fundo": "superficie-escuro"
+    },
+    {
+      "tema": "escuro",
+      "texto": "texto-secundario-escuro",
+      "fundo": "superficie-escuro"
+    },
+    {
+      "tema": "escuro",
+      "texto": "texto-escuro",
+      "fundo": "superficie-alt-escuro"
+    },
+    {
+      "tema": "escuro",
+      "texto": "primaria-forte-escuro",
+      "fundo": "primaria-suave-escuro"
+    },
+    {
+      "tema": "escuro",
+      "texto": "sucesso-escuro",
+      "fundo": "fundo-escuro"
+    },
+    {
+      "tema": "escuro",
+      "texto": "sucesso-escuro",
+      "fundo": "sucesso-suave-escuro"
+    },
+    {
+      "tema": "escuro",
+      "texto": "alerta-escuro",
+      "fundo": "fundo-escuro"
+    },
+    {
+      "tema": "escuro",
+      "texto": "alerta-escuro",
+      "fundo": "alerta-suave-escuro"
+    },
+    {
+      "tema": "escuro",
+      "texto": "erro-escuro",
+      "fundo": "fundo-escuro"
+    },
+    {
+      "tema": "escuro",
+      "texto": "erro-escuro",
+      "fundo": "erro-suave-escuro"
+    },
+    {
+      "tema": "escuro",
+      "texto": "info-escuro",
+      "fundo": "fundo-escuro"
+    },
+    {
+      "tema": "escuro",
+      "texto": "info-escuro",
+      "fundo": "info-suave-escuro"
+    },
+    {
+      "tema": "escuro",
+      "texto": "texto-suave-escuro",
+      "fundo": "superficie-alt-escuro"
+    },
+    {
+      "tema": "claro",
+      "texto": "branco",
+      "fundo": "primaria-forte-claro"
+    }
+  ]
+}

@@ -1,6 +1,14 @@
 organization:
   name: Sistema Clínica  # placeholder de marca; a marca real é servida por GET /api/Branding (BrandingSettings)
   domain: Clínicas de saúde
+  brand_book:  # identidade da marca (rascunho aprovado pelo dono em 2026-11-24)
+    path: context/marca/
+    index: context/marca/README.md
+    brand: Cuidaflux
+    slogan: O fluxo do cuidado.
+    status: aprovado pelo dono; condicionado à consulta manual no INPI (NCL 9/42/44), handles e registro de domínios (ver decisao-nome.md)
+    verify: node scripts/check-marca.mjs .  # contraste AA, 18 variantes de logo, documentos e links
+    note: o arquivo de desenho (.pen) fica fora do repositório (Pencil); os SVG são regenerados por context/marca/scripts/gerar-logos.mjs
   units: []  # unidades são cadastradas por cliente (BranchOffice); sem dados de exemplo no registry
   environments:
     - name: development
