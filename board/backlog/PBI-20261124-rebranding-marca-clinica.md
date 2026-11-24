@@ -2,7 +2,8 @@
 id: PBI-20261124-rebranding-marca-clinica
 tipo: feature
 titulo: Criar identidade de marca completa da plataforma de gestão para clínicas
-status: backlog
+status: superseded
+substituido_por: [PBI-20261124-definir-identidade-de-marca-clinica, PBI-20261124-aplicar-identidade-de-marca-ao-sistema]
 prioridade: alta
 workspaces: [architecture-registry, intranet-frontend, extranet-frontend, core-backend]
 criado_em: 2026-11-24
@@ -70,3 +71,17 @@ Como dono do produto, quero uma identidade de marca completa e aplicada ao siste
 - [x] Cenários de teste unitário e funcional definidos
 - [x] Workspaces impactados identificados
 - [x] Tipo de mudança e prioridade definidos
+
+## Validação
+**Status:** ❌ CHANGES_REQUESTED — 2026-11-24
+**Validador:** /validate-pbi
+**Pendências:**
+1. **AC-7 é falso como escrito ("sem alteração de código além de config/assets")** — o contrato atual não tem fonte: `BrandingSettings.cs:17-24`, `config/branding.ts:6-15` e `BrandingResponseDto` só têm 8 campos. Fonte está fixa no código: Outfit hardcoded em ~12 gráficos da Intranet (ex.: `BarChartOne.tsx:8,57`, `BarChartGeneric.tsx:53,89,127`, `CountryMap.tsx:63`) e Satoshi via `Extranet/src/css/satoshi.css` + `tailwind.config.ts`. Corrigir: reescrever AC-7 prevendo código (campos `fontFamily`/`fontUrl` em BrandingSettings, DTO, `BrandingService` com validador, `resolveBranding` da Intranet, `branding-resolve.ts` da Extranet, injeção de `<link>`/CSS var e troca do `fontFamily` dos gráficos por variável).
+2. **E-mails (AC-7 / FT-3) sem base no código** — `EmailDispatchService.cs:69,225` só substitui `{{empresa}}` pelo nome; não existe cabeçalho/assinatura/logo no template (`constants/emailTemplates.ts`). Definir: o PBI inclui criar cabeçalho/assinatura com logo? Se sim, listar como entrega e AC próprio; se não, remover e-mail do AC-7/FT-3.
+3. **Sobreposição não declarada com `PBI-...-completar-branding-e-remover-nomes-de-unidade`** (backlog) — ele já cobre `logoIconUrl`, `secondaryColor` consumida, contraste WCAG da cor primária (AC-2) e `phone/address`. Mesmo contrato e mesmos 3 validadores seriam alterados por dois PBIs. Declarar em Dependências e definir ordem (recomendado: completar-branding antes; este só soma `fontFamily`/`fontUrl`); remover do escopo o que duplica o validador de contraste.
+4. **ACs 1, 2, 3, 4 e 8 não são testáveis automaticamente** (pesquisa, naming, escolha do dono, textos, publicação). Regra "cada AC testável" reprova. Corrigir: converter em critérios verificáveis por artefato (ex.: AC-1 → arquivo `context/marca/concorrentes.md` com ≥8 linhas e colunas obrigatórias, checável por script; AC-3 → arquivo `decisao-nome.md` com aprovação do dono registrada) **ou** separar a parte de descoberta num PBI `spike`/pesquisa e deixar neste só o que vira código (AC-5 a AC-8).
+5. **Entrega de AC-5 (logo) é decisão criativa/subjetiva sem rastreio de origem** — falta definir quem gera o logo (designer, IA com licença) e onde registrar a origem exigida pela regra de negócio de IA generativa; UT-5 só checa existência de arquivos. Acrescentar o local do registro de origem/licença e o critério objetivo mínimo (nomes de arquivo esperados, viewBox, tamanho máximo SVG).
+6. **Contrato/nomenclatura inconsistente com o código** — o PBI cita `BrandingSettings` como seção de config; a seção real é `Branding` (`BrandingSettings.cs:6`). `GET /api/Branding` "do PBI-1" não existe como ID rastreável; referenciar `PBI-20261124-desvincular-marca-instituto-barros` (em `done/`). "Extranet" = `sistema-clinica-portal` no registry; `workspaces` usa nomes (`core-backend`, `intranet-frontend`, `extranet-frontend`) que não existem como `name:` no `architecture-registry.yaml` (ver PBI corrigir-yaml-e-paths-do-registry). Alinhar com o padrão adotado nos demais PBIs ou com o registry.
+7. **UT-1/UT-2 não dizem onde mora o validador de contraste** (backend C#? front TS? script de build?). UT-3 ("DTO com nome, logos, cores, fonte") e UT-4 ("URL inválida cai na fonte de sistema") só fazem sentido após item 1. Especificar a camada e o arquivo, e o limite explícito (≥4.5:1 texto normal; ≥3:1 para texto grande/ícones se aplicável).
+8. **Riscos técnicos incompletos** — falta: carregar fonte externa vs CSP dos fronts (a CSP do `SecurityHeadersMiddleware` vale só para a API; nenhuma CSP de front encontrada no repo — checar headers da Vercel), self-host de fonte (LGPD/performance) e impacto no modo escuro (logos dark/light já existem, mas paleta nova exige revalidar contraste nos dois temas).
+9. **Pesquisa de concorrentes duplicada com `PBI-...-publico-mercado-modelo-negocio`** — o próprio PBI diz coordenar, mas AC-1 repete a lista de ≥8 concorrentes. Definir qual PBI é dono do documento e o outro apenas consome.
