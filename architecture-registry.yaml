@@ -1,20 +1,16 @@
 organization:
-  name: Instituto Barros
-  domain: Clínica de Fisioterapia
-  units:
-    - Morumbi
-    - Mooca
-    - Paulista
-    - Ipiranga
+  name: Sistema Clínica  # placeholder de marca; a marca real é servida por GET /api/Branding (BrandingSettings)
+  domain: Clínicas de saúde
+  units: []  # unidades são cadastradas por cliente (BranchOffice); sem dados de exemplo no registry
   environments:
     - name: development
       api_url: http://localhost:8080
       admin_url: http://localhost:5173
       portal_url: http://localhost:3000
-    - name: production
-      api_url: https://instituto-barros-sistema.azurewebsites.net  # Azure Web App
-      admin_url: https://sistema-instituto.vercel.app
-      portal_url: https://instituto-barros-portal-cliente.vercel.app
+    - name: production  # definir por cliente
+      api_url: https://api.example.com
+      admin_url: https://admin.example.com
+      portal_url: https://portal.example.com
 
 # ─────────────────────────────────────────────
 # SERVIÇOS / APLICAÇÕES
@@ -22,19 +18,39 @@ organization:
 services:
 
   # ── 1. API BACKEND ────────────────────────────────────────────────────────────
-  - name: instituto-barros-api
+  - name: sistema-clinica-api
     type: api
     description: >
-      API REST central do Instituto Barros. Expõe todos os endpoints de negócio:
+      API REST central do Sistema Clínica. Expõe todos os endpoints de negócio:
       gestão de pacientes, funcionários, filiais, agendamentos, ordens de serviço,
-      sessões, financeiro, notificações, WhatsApp e autenticação.
+      sessões, financeiro, notificações, WhatsApp, autenticação e branding.
     language: C# .NET 8.0
     architecture: DDD (Domain-Driven Design) + Clean Architecture
-    path: Instituto_Barros_Sistema/
-    solution: Instituto_Barros_Sistema.sln
+    path: Clinica-Saude-Backend/
+    solution: SistemaClinica.sln
     swagger: /swagger/index.html  # disponível apenas em Development e QA
-    docker_image: tecnologiainstitutobarrros/sistema-instituto
-    deployed_at: Azure Web App (instituto-barros-sistema)
+    docker_image: "vars.DOCKER_IMAGE (variável do GitHub Actions; definir por cliente)"
+    deployed_at: "Azure Web App (vars.AZURE_WEBAPP_NAME; definir por cliente)"
+
+    configuration:
+      # Variáveis de ambiente / appsettings lidas pela API (hierarquia "__" nas variáveis de ambiente)
+      branding:
+        section: BrandingSettings
+        description: >
+          Marca servida por GET /api/Branding (Name, ShortName, LogoLightUrl, LogoDarkUrl,
+          FaviconUrl, PrimaryColor, SecondaryColor, SupportEmail). Campo ausente cai no padrão
+          neutro ("Sistema Clínica" / "Clínica"). Somente leitura, sem segredos.
+      cors:
+        keys: ["Cors__AllowedOrigins__0", "Cors__AllowedOrigins__1", "Cors__AllowedOrigins__N"]
+        default: [http://localhost:5173, http://localhost:3000]
+        note: em produção, listar as origens do admin e do portal do cliente
+      error_docs:
+        key: "ErrorDocs:BaseUrl"
+        default: https://example.com/errors/
+        description: base do campo Type (ProblemDetails) montado pelo GlobalExceptionFilter
+      jwt:
+        issuer_audience_default: SistemaClinica  # tokens emitidos antes da troca são invalidados; override por variável de ambiente
+      database_name: SistemaClinicaDB
 
     layers:
       domain:
@@ -199,7 +215,7 @@ services:
           - CustomerAccessService (ICustomerAccessService) — TEMPORÁRIO
           - WhatsappNumberService (IWhatsappNumberService)
           - WhatsappConversationService (IWhatsappConversationService)
-        - InsightService (IInsightService) — bounded context Insights de Venda
+          - InsightService (IInsightService) — bounded context Insights de Venda
         helpers:
           - DatabaseEncryptionHelper: AES-256 CBC. Métodos: EncryptField(string?), DecryptField(string?). Registrado como Singleton.
           - EmailHelper
@@ -229,6 +245,12 @@ services:
 
     controllers:
       # Formato: route | method | auth | description
+      - controller: BrandingController
+        route: /api/Branding
+        description: Marca configurável (BrandingSettings). Somente leitura, anônimo, cache de 5 min, sem dados sensíveis.
+        endpoints:
+          - "GET    /api/Branding   | AllowAnonymous | Retorna 8 campos: name, shortName, logoLightUrl, logoDarkUrl, faviconUrl (padrão /favicon.ico), primaryColor, secondaryColor, supportEmail"
+
       - controller: UserController
         route: /Api/User
         endpoints:
@@ -433,6 +455,7 @@ services:
       - provider: sqlserver
         connection_key: DefaultConnection
         context: InstitutoContext
+        database_name: SistemaClinicaDB
         tables:
           - Customer, HistoryCustomer
           - UsuariosData (AspNetUsers + Identity tables)
@@ -465,22 +488,24 @@ services:
         - InputValidationMiddleware: sanitização com DOMPurify-style server-side
         - AntiForgeryMiddleware: validação de token CSRF
       cors:
+        origins_source: "Cors__AllowedOrigins__N (variáveis de ambiente) / Cors:AllowedOrigins (appsettings)"
         origins:
-          - http://localhost:3000
-          - http://localhost:5173
-          - https://sistema-instituto.vercel.app
-          - https://instituto-barros-portal-cliente.vercel.app
+          - http://localhost:3000   # padrão de desenvolvimento
+          - http://localhost:5173   # padrão de desenvolvimento
+          # produção: definir por cliente via Cors__AllowedOrigins__N
         methods: [GET, POST, PUT, DELETE, PATCH, OPTIONS]
         headers: [Content-Type, Authorization, X-Requested-With]
 
     ci_cd:
       provider: GitHub Actions
-      workflow: .github/workflows/instituto_barros.yml
+      workflow: .github/workflows/sistema-clinica.yml
+      variables: [DOCKER_IMAGE, AZURE_WEBAPP_NAME]  # GitHub repository variables (vars.*)
       pipeline:
         - trigger: push to main
+        - verify: job `verify` — roda scripts/check-brand.mjs (guarda anti-marca) e build/testes antes do build da imagem
         - build: Docker image (alpine)
-        - push: Docker Hub (tecnologiainstitutobarrros/sistema-instituto:{sha})
-        - deploy: Azure Web App (instituto-barros-sistema, slot Production)
+        - push: Docker Hub (vars.DOCKER_IMAGE:{sha})
+        - deploy: Azure Web App (vars.AZURE_WEBAPP_NAME, slot Production)
 
     deployment:
       platform: Azure Web App (container)
@@ -488,15 +513,19 @@ services:
       port: 80 (container) / HTTPS via Azure
 
   # ── 2. SISTEMA ADMINISTRATIVO (Frontend) ────────────────────────────────────
-  - name: instituto-barros-admin
+  - name: sistema-clinica-intranet
     type: frontend
     description: >
       Painel administrativo da clínica. Usado por funcionários, fisioterapeutas,
       coordenadores, comercial, administrativo e financeiro. Consome a API backend.
+      A marca (título, favicon, logos, cores, textos) vem de GET /api/Branding via
+      hook/provider de branding, com fallback neutro embutido.
     framework: React 18 + Vite + TypeScript
-    path: Instituto_Barros_Front/FrontEnd_Instituto_Barros/FrontEnd_Instituto_Barros/
-    deployed_at: Vercel (https://sistema-instituto.vercel.app)
+    path: Clinica-Saude-Frontend/
+    deployed_at: Vercel (definir por cliente)
     dev_port: 5173
+    environment_variables:
+      VITE_API_BASE_URL: URL base da API (obrigatória em produção; sem default de marca; falha explícita se ausente)
 
     dependencies:
       ui: [TailwindCSS v4, Lucide React, Apexcharts, React Apexcharts]
@@ -609,16 +638,19 @@ services:
       DOCUMENTACAO:          [todos — conteúdo filtrado por role via JWT no frontend]
 
   # ── 3. PORTAL CLIENTE ───────────────────────────────────────────────────────
-  - name: instituto-barros-portal-cliente
+  - name: sistema-clinica-portal
     type: frontend
     description: >
       Portal self-service para pacientes da clínica. Permite login com CPF,
       visualização de perfil, histórico de agendamentos, solicitação e cancelamento
-      de consultas, e reset de senha por email.
+      de consultas, e reset de senha por email. A marca é carregada de
+      GET /api/Branding no layout (server component), com fallback neutro.
     framework: Next.js 16 + TypeScript + TailwindCSS v3
     path: PortalCliente/
-    deployed_at: Vercel (https://instituto-barros-portal-cliente.vercel.app)
+    deployed_at: Vercel (definir por cliente)
     dev_port: 3000
+    environment_variables:
+      NEXT_PUBLIC_API_BASE_URL: URL base da API (obrigatória; falha explícita se ausente; substitui NEXT_PUBLIC_API_URL)
 
     dependencies:
       ui: [TailwindCSS v3, Lucide React, Next Themes]
@@ -646,10 +678,10 @@ services:
     services_path: PortalCliente/src/services/
 
   # ── 4. SITE INSTITUCIONAL ───────────────────────────────────────────────────
-  - name: instituto-barros-site
+  - name: sistema-clinica-site
     type: frontend
     description: >
-      Site institucional público do Instituto Barros. Apresenta a clínica,
+      Site institucional público da clínica. Apresenta a clínica,
       serviços, equipe, unidades e galeria. Sem integração com a API.
     framework: React 19 + Vite + TypeScript + TailwindCSS v3
     path: Site/
@@ -665,25 +697,25 @@ services:
       - UnitsSection, CTASection
 
   # ── 5. BOT WHATSAPP (n8n) ──────────────────────────────────────────────────
-  - name: instituto-barros-bot-whatsapp
+  - name: sistema-clinica-bot-whatsapp
     type: automation
     description: >
       Fluxo n8n de atendimento automatizado via WhatsApp. Integra com Evolution API
       para recepção de mensagens, Redis para estado da conversa, e a API backend
       para persistência de mensagens e conversas.
-    path: Bot/InstitutoBarrosAtendimento.json
+    path: Bot/SistemaClinicaAtendimento.json
     platform: n8n (self-hosted, Docker)
     node_count: ~145
 
     external_integrations:
       - name: Evolution API
         type: WhatsApp Gateway
-        instance: InstitutoBarros
+        instance: SistemaClinica
         base_url: http://api:8080  # endereço interno Docker
         auth_header: apikey
       - name: Redis
         use: estado da conversa (esteira de atendimento, respostas, sessão)
-      - name: Instituto Barros API
+      - name: Sistema Clínica API
         base_url: "{{ ApiBaseUrl }}"  # definido no nó Variáveis Config
         auth: "Bearer {{ ApiServiceToken }}"  # token JWT de usuário de serviço
 
@@ -702,12 +734,12 @@ services:
       - Reabilitação: pergunta dor → nível → fisio → faz sentido → agendamento
       - Prevenção/Recovery: pergunta dor → nível → atividade → fortalecimento → análise → clínica
       - Liberação: pergunta dor → atividade → tratamento → faz sentido
-      - Agendamento: unidade (Morumbi/Mooca/Paulista/Ipiranga) → coleta dados → confirmação
+      - Agendamento: unidade (cadastrada por cliente) → coleta dados → confirmação
       - Informações: dúvidas → convênio → reembolso → CTA agendamento
       - Nenhum Serviço: contato especialista
 
     variables_config:
-      InstanciaWhatsapp: InstitutoBarros
+      InstanciaWhatsapp: SistemaClinica
       TokenWhatsapp: "<EVOLUTION_API_TOKEN>"  # valor real em vault/secret — não commitar aqui (SEC001)
       ApiBaseUrl: http://api:8080
       ApiServiceToken: "<JWT_SERVICE_TOKEN>"  # ← substituir por token real do usuário de serviço
@@ -719,7 +751,7 @@ shared_platform:
 
   databases:
     - provider: sqlserver
-      name: Instituto Barros DB
+      name: SistemaClinicaDB
       connection_key: DefaultConnection (appsettings.json)
       orm: Entity Framework Core 8 (Code First, Migrations)
       host: "(Azure SQL ou local)"
@@ -736,18 +768,25 @@ shared_platform:
 
   hosting:
     - service: Azure Web App
-      app: instituto-barros-sistema
+      app: "vars.AZURE_WEBAPP_NAME (definir por cliente)"
       type: container (Docker)
-      image: tecnologiainstitutobarrros/sistema-instituto
+      image: "vars.DOCKER_IMAGE (definir por cliente)"
     - service: Vercel
-      apps: [sistema-instituto, instituto-barros-portal-cliente]
+      apps: [sistema-clinica-intranet, sistema-clinica-portal]  # nomes de projeto definidos por cliente
     - service: n8n self-hosted
       runtime: Docker (interno)
 
   ci_cd:
     - provider: GitHub Actions
-      trigger: push to main (Instituto_Barros_Sistema/)
-      steps: [build Docker image → push Docker Hub → deploy Azure Web App]
+      trigger: push to main (Clinica-Saude-Backend/)
+      workflow: sistema-clinica.yml
+      steps: [verify (check-brand + build/testes) → build Docker image → push Docker Hub → deploy Azure Web App]
+
+  brand_tooling:
+    - file: tokens.json
+      description: Fonte única dos identificadores técnicos neutros (SistemaClinica, sistema-clinica, sistema_clinica, SistemaClinicaDB, "Sistema Clínica") e do mapa das variantes antigas; usada pela renomeação e pelo gerador white-label.
+    - file: scripts/check-brand.mjs
+      description: Guarda anti-marca (Node, sem dependências). Varre conteúdo, nomes de arquivo e de pasta; exit 0 sem ocorrências, 1 com ocorrências, 2 em erro de uso. No registry roda com --exclude board,context,tokens.json. Executado no job `verify` do CI do backend e nos fronts (npm run check:brand).
 
   observability:
     - logs: LogModel (banco SQL) + AuditLogService (registro de ações críticas)
@@ -800,14 +839,14 @@ pending:
   - id: P002
     status: open
     description: "Substituir ApiServiceToken no nó 'Variáveis Config' do n8n por token JWT real de usuário de serviço"
-    file: Bot/InstitutoBarrosAtendimento.json
+    file: Bot/SistemaClinicaAtendimento.json
     node_id: 34321788-508d-4df0-97eb-36c1392c53db
     priority: alta
 
   - id: P003
     status: open
     description: "Migrar WhatsappService.ts para padrão .refactored.ts usando BaseApiService"
-    file: Instituto_Barros_Front/.../src/services/WhatsappService.ts
+    file: Clinica-Saude-Frontend/src/services/WhatsappService.ts
     priority: media
 
   - id: P004

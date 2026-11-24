@@ -1,5 +1,7 @@
 # Mapa de Módulos e Funções — Sistema Clínica (baseline herdado do Instituto Barros)
 
+> Nota: Baseline histórico do Instituto Barros; os nomes foram neutralizados em 2026-11-24 (PBI-20261124-desvincular-marca-instituto-barros).
+
 > Baseline levantado em 2026-11-24 a partir do código atual, antes da remodelagem para "Clínica de Saúde".
 > Origem: sistema de fisioterapia do Instituto Barros (licença cedida). Fonte da verdade técnica detalhada: `architecture-registry.yaml`.
 
@@ -102,13 +104,17 @@ Legenda de acoplamento ao domínio antigo: 🟢 genérico (reaproveitar) · 🟡
 ### 3.19 Documentação in-app 🟢
 - **Front**: `Documentacao` (a reescrever para a nova marca).
 
+### 3.21 Branding 🟢
+- **Back** `BrandingController`: `GET /api/Branding` (anônimo, somente leitura, cache de 5 min). Lê `BrandingSettings` (appsettings/variáveis de ambiente) e devolve `name`, `shortName`, `logoLightUrl`, `logoDarkUrl`, `faviconUrl` (padrão `/favicon.ico`), `primaryColor`, `secondaryColor`, `supportEmail`. Campo ausente cai no padrão neutro.
+- **Front**: hook/provider de branding nos dois fronts (título da aba, favicon, logos, cores e textos), com fallback neutro embutido se a API falhar. Intranet usa `VITE_API_BASE_URL`; Extranet usa `NEXT_PUBLIC_API_BASE_URL`.
+
 ### 3.20 Transversais
 - Soft-delete (`DataDesativacao`) e `DataCadastro` em `BaseModel`; criptografia de banco (`DATABASE_ENCRYPTION_GUIDE.md`); `Moq_Data.sql` (dados de exemplo); `Dockerfile`; Swagger só em Dev/QA.
 - Telas herdadas do template TailAdmin sem função de negócio (Alerts, Avatars, Badges, Buttons, Images, Videos, LineChart, BarChart, Blank, FormElements): candidatas a remoção.
 
 ## 4. Pontos de atenção para a remodelagem
 
-1. **Marca/dados Instituto Barros**: nome, unidades, URLs Azure/Vercel, `tecnologiainstitutobarrros/...` (Docker), pacote `tailadmin-react` — trocar.
+1. **Marca/dados Instituto Barros**: desvínculo feito em 2026-11-24 (PBI-20261124-desvincular-marca-instituto-barros): nome, unidades, URLs, imagem Docker e identificadores técnicos neutralizados e marca extraída para configuração (3.21 Branding). Resta a marca definitiva (rebranding) e, no front, revisar o pacote `tailadmin-react` e a licença do template.
 2. **Domínio fisioterapia**: patologia, sessões/planos, "Banheira", check-in Fisio/Plano.
 3. **Prontuário/clínico**: não existe módulo de prontuário, anamnese, prescrição ou convênio — lacuna para clínica de saúde.
 4. **Dois frontends** com stacks diferentes (Vite vs Next.js); Extranet ainda sem repo no novo GitHub.
