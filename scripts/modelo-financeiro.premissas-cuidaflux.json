@@ -1,0 +1,12 @@
+{
+  "_aviso": "PROPOSTA — hipóteses, aguarda aprovação do dono. Origem: context/negocio/precificacao.md (mix 50% Essencial R$ 149, 40% Clínica R$ 319, 10% Dedicado R$ 419; custo variável ponderado incluindo gateway de 3% e sem custo de IA (IA não existe no produto; R$ 92,35 em 2026-11-24, antes R$ 93,17 com IA reservada); churn 4%, CAC, custo fixo, leads e conversão são hipóteses sem medição). A margem bruta mínima de 60% é decisão do dono (2026-11-24).",
+  "arpa": 244,
+  "custoVariavelPorCliente": 92.35,
+  "churn": 0.04,
+  "cac": 800,
+  "custoFixo": 5000,
+  "clientesIniciais": 3,
+  "leadsPorMes": 20,
+  "conversao": 0.15,
+  "margemBrutaMinima": 0.6
+}

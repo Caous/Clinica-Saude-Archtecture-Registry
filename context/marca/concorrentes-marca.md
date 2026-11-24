@@ -29,3 +29,5 @@
 - **Identidade visual:** a amostra é dominada por roxo (Amplimed, Dental Office, Doctoralia indicativo), laranja (Clinicorp) e amarelo/azul (Simples Dental). Uma paleta fora desse eixo, com bom contraste nos temas claro e escuro, ajuda a diferenciar.
 - **Tipografia:** sans geométricas genéricas (Inter, Manrope, Sora) dominam onde foi possível verificar. Uma família livre (OFL) mais característica pode dar personalidade sem custo de licença.
 - **Dois públicos, uma marca:** Doctoralia fala ao paciente e os demais ao gestor/profissional. Uma marca que una a clínica e o portal do paciente (agenda, WhatsApp) de forma coerente é uma oportunidade.
+
+> Nota (2026-11-24): a análise completa de concorrentes (funcionalidades, preços, cobrança) é mantida em `../negocio/concorrentes.md`; esta lista é só a análise de marca.
