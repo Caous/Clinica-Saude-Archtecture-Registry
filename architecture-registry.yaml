@@ -9,6 +9,12 @@ organization:
     status: aprovado pelo dono; condicionado à consulta manual no INPI (NCL 9/42/44), handles e registro de domínios (ver decisao-nome.md)
     verify: node scripts/check-marca.mjs .  # contraste AA, 18 variantes de logo, documentos e links
     note: o arquivo de desenho (.pen) fica fora do repositório (Pencil); os SVG são regenerados por context/marca/scripts/gerar-logos.mjs
+  business_docs:  # público, mercado, modelo de negócio, preço e material de venda (rascunho para aprovação do dono, 2026-11-24)
+    path: context/negocio/
+    index: context/negocio/README.md
+    status: preços, oferta de lançamento e roteiro de demo são PROPOSTAS; decididos pelo dono apenas a margem bruta mínima (60%) e a ordem de nichos (fisioterapia, estética, pilates)
+    verify: node scripts/check-negocio.mjs .
+    model: node scripts/modelo-financeiro.mjs --premissas scripts/modelo-financeiro.premissas-cuidaflux.json --out context/negocio/modelo-financeiro.xlsx
   units: []  # unidades são cadastradas por cliente (BranchOffice); sem dados de exemplo no registry
   environments:
     - name: development

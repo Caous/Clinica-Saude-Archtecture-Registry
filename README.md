@@ -41,6 +41,21 @@ Os testes do script rodam com:
 node --test "scripts/*.test.mjs"
 ```
 
+## scripts/check-negocio.mjs
+
+Script Node (22+) sem dependências que verifica os documentos de negócio em `context/negocio/` (mercado, concorrentes, precificação, personas, modelos de negócio, go-to-market e riscos). O formato esperado de cada documento está documentado no cabeçalho do script.
+
+```
+node scripts/check-negocio.mjs [<raiz>] [--docs] [--links] [--arquivos] [--negocio <dir>]
+```
+
+- `--docs`: estrutura de cada documento (tabelas e colunas, contagens mínimas, fonte e data, faixa mínimo–máximo do funil, `Aprovado por:`). `--links`: links e imagens relativos resolvem e ficam dentro da pasta. `--arquivos`: os 13 arquivos obrigatórios existem (inclui `modelo-financeiro.xlsx`). Sem flag, roda os três.
+- `--negocio <dir>` troca a pasta padrão `<raiz>/context/negocio` (o diretório precisa existir). Exit code `0`: ok. `1`: pendências listadas por modo. `2`: erro de uso ou de I/O. Arquivos `.md` maiores que 1 MB viram pendência.
+
+```
+node scripts/check-negocio.mjs .
+```
+
 ## Contribuindo
 
 Atualize o YAML e os Markdown sempre que a arquitetura mudar. Antes de enviar alterações, rode a verificação de marca acima.

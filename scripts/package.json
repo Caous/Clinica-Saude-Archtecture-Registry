@@ -1,0 +1,10 @@
+{
+  "name": "architecture-registry-scripts",
+  "private": true,
+  "type": "module",
+  "description": "Scripts do registry. Somente modelo-financeiro.mjs usa dependencia (exceljs, dev) e apenas para gerar .xlsx.",
+  "engines": { "node": ">=22" },
+  "devDependencies": {
+    "exceljs": "^4.4.0"
+  }
+}

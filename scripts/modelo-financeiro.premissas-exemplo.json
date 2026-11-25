@@ -1,0 +1,11 @@
+{
+  "_aviso": "EXEMPLO: valores ilustrativos e NAO sao premissas reais do Cuidaflux. Substituir pelas premissas aprovadas em precificacao.md antes de gerar o modelo final.",
+  "arpa": 300,
+  "custoVariavelPorCliente": 90,
+  "churn": 0.03,
+  "cac": 1200,
+  "custoFixo": 15000,
+  "clientesIniciais": 5,
+  "leadsPorMes": 20,
+  "conversao": 0.25
+}
