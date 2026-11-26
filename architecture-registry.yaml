@@ -49,11 +49,15 @@ services:
     configuration:
       # Variáveis de ambiente / appsettings lidas pela API (hierarquia "__" nas variáveis de ambiente)
       branding:
-        section: BrandingSettings
+        section: Branding  # classe BrandingSettings; variáveis Branding__*
         description: >
-          Marca servida por GET /api/Branding (Name, ShortName, LogoLightUrl, LogoDarkUrl,
-          FaviconUrl, PrimaryColor, SecondaryColor, SupportEmail). Campo ausente cai no padrão
-          neutro ("Sistema Clínica" / "Clínica"). Somente leitura, sem segredos.
+          Marca servida por GET /api/Branding (15 campos): Name, ShortName, LogoLightUrl, LogoDarkUrl,
+          LogoIconUrl, LogoIconDarkUrl, FaviconUrl, PrimaryColor, SecondaryColor, SupportEmail, Phone,
+          Address, FontFamily, FontHeadingFamily, FontUrl. Campo ausente ou inválido cai no padrão
+          neutro ("Sistema Clínica" / "Clínica"; fontes vazias = fonte atual de cada front). PrimaryColor
+          com contraste < 4,5:1 com branco é rejeitada (volta a #465fff). Somente leitura, sem segredos.
+          O appsettings.json traz a marca do produto (Cuidaflux); ativos em /images/brand/cuidaflux/
+          nos dois fronts (logos de e-mail em PNG).
       cors:
         keys: ["Cors__AllowedOrigins__0", "Cors__AllowedOrigins__1", "Cors__AllowedOrigins__N"]
         default: [http://localhost:5173, http://localhost:3000]
@@ -263,7 +267,7 @@ services:
         route: /api/Branding
         description: Marca configurável (BrandingSettings). Somente leitura, anônimo, cache de 5 min, sem dados sensíveis.
         endpoints:
-          - "GET    /api/Branding   | AllowAnonymous | Retorna 8 campos: name, shortName, logoLightUrl, logoDarkUrl, faviconUrl (padrão /favicon.ico), primaryColor, secondaryColor, supportEmail"
+          - "GET    /api/Branding   | AllowAnonymous | Retorna 15 campos: name, shortName, logoLightUrl, logoDarkUrl, logoIconUrl, logoIconDarkUrl, faviconUrl (padrão /favicon.ico), primaryColor, secondaryColor, supportEmail, phone, address, fontFamily, fontHeadingFamily, fontUrl"
 
       - controller: UserController
         route: /Api/User
